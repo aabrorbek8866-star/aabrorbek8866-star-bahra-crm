@@ -11,6 +11,8 @@ on:
 
 jobs:
   backup:
+    # Public repozitoriyda artifact'larni begonalar ham yuklab olishi mumkin — zaxira faqat private'da ishlaydi
+    if: github.event.repository.private == true
     runs-on: ubuntu-latest
     steps:
       - name: PostgreSQL 16 klientini o'rnatish
