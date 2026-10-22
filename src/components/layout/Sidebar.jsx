@@ -1,3 +1,4 @@
+import { COMPANY } from "../../../shared/company.js";
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Building2, Users, AlertTriangle, FileSpreadsheet, X, Bot, UserCog, ScrollText, LogOut } from "lucide-react";
 import { useCrm } from "../../store/CrmContext";
@@ -33,7 +34,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 font-bold text-white">B</div>
             <div>
               <p className="text-sm font-semibold text-white">Bahra Building</p>
-              <p className="text-[11px] text-slate-400">Sotuv va to'lovlar CRM</p>
+              <p className="text-[11px] text-slate-400">{COMPANY.legalName}</p>
             </div>
           </div>
           <button className="lg:hidden" onClick={onClose} aria-label="Yopish"><X size={18} /></button>

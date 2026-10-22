@@ -1,3 +1,4 @@
+import { COMPANY } from "../../shared/company.js";
 import { useState } from "react";
 import { Loader2, LogIn } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
@@ -28,7 +29,7 @@ export default function Login() {
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-600 text-lg font-bold text-white">B</div>
           <div>
             <p className="font-semibold text-slate-900">Bahra Building</p>
-            <p className="text-xs text-slate-500">Sotuv va to'lovlar CRM</p>
+            <p className="text-xs text-slate-500">{COMPANY.legalName} · Sotuv va to'lovlar CRM</p>
           </div>
         </div>
         <label className="label" htmlFor="login">Login</label>

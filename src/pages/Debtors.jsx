@@ -4,6 +4,7 @@ import { MessageSquare, Send, Scale, CheckCircle2, Loader2, ShieldCheck } from "
 import { useCrm } from "../store/CrmContext";
 import { useAuth } from "../store/AuthContext";
 import { fillSmsTemplate as fillTemplate } from "../../shared/building.js";
+import { COMPANY } from "../../shared/company.js";
 import { PageHeader, Modal, Badge, EmptyState } from "../components/ui";
 import { useAgents } from "../components/ai/AgentContext";
 import { sendSms } from "../services/api";
@@ -11,7 +12,7 @@ import { debtSeverity } from "../../shared/debt.js";
 import { fmtDate, fmtMoney } from "../utils/format";
 
 const DEFAULT_TEMPLATE =
-  "Hurmatli {fio}! Bahra Building: {xonadon}-xonadon bo'yicha {qarz} so'm muddati o'tgan qarzdorlik mavjud ({kun} kun). Iltimos, 5 kun ichida to'lovni amalga oshiring. Tel: +998 71 000-00-00";
+  `Hurmatli {fio}! ${COMPANY.brand}: {xonadon}-xonadon bo'yicha {qarz} so'm muddati o'tgan qarzdorlik mavjud ({kun} kun). Iltimos, 5 kun ichida to'lovni amalga oshiring. Tel: ${COMPANY.phone}`;
 
 export default function Debtors() {
   const { debtors, smsLog, reload } = useCrm();
