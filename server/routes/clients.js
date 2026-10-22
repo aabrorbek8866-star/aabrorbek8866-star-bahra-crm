@@ -23,6 +23,10 @@ const FIELDS = {
   downPayment: "down_payment",
   monthlyPayment: "monthly_payment",
   installmentMonths: "installment_months",
+  fullNameCyr: "full_name_cyr",
+  address: "address",
+  passportIssuedBy: "passport_issued_by",
+  passportIssuedAt: "passport_issued_at",
 };
 
 /** Mijoz ma'lumotlarini tekshirish. partial=true — faqat yuborilgan maydonlar. */
@@ -30,6 +34,9 @@ function validateClient(body, partial) {
   const v = {};
   const has = (k) => body[k] !== undefined;
   for (const k of ["fullName", "passport", "phone", "contractNumber"]) if (!partial || has(k)) v[k] = String(body[k] ?? "").trim();
+  // Notarius hujjatlari uchun (ixtiyoriy)
+  for (const k of ["fullNameCyr", "address", "passportIssuedBy"]) if (has(k)) v[k] = String(body[k] ?? "").trim();
+  if (has("passportIssuedAt")) v.passportIssuedAt = body.passportIssuedAt || null;
   if (!partial || has("contractDate")) v.contractDate = body.contractDate;
   for (const k of ["totalPrice", "downPayment", "monthlyPayment"]) if (!partial || has(k)) v[k] = money(body[k]);
   if (!partial || has("installmentMonths")) v.installmentMonths = Math.round(Number(body.installmentMonths) || 0);
@@ -37,6 +44,7 @@ function validateClient(body, partial) {
   if (v.fullName !== undefined && v.fullName.length < 3) return { error: "F.I.O kiritilmagan" };
   if (v.contractNumber !== undefined && !v.contractNumber) return { error: "Shartnoma raqami kiritilmagan" };
   if (v.contractDate !== undefined && !isDate(v.contractDate)) return { error: "Shartnoma sanasi noto'g'ri" };
+  if (v.passportIssuedAt && !isDate(v.passportIssuedAt)) return { error: "Pasport berilgan sana noto'g'ri" };
   for (const k of ["totalPrice", "downPayment", "monthlyPayment"]) if (v[k] !== undefined && v[k] < 0) return { error: "Summalar manfiy bo'lishi mumkin emas" };
   if (v.installmentMonths !== undefined && (v.installmentMonths < 0 || v.installmentMonths > 240)) return { error: "Muddat 0–240 oy oralig'ida bo'lishi kerak" };
   if (v.totalPrice !== undefined && v.downPayment !== undefined && v.downPayment > v.totalPrice && v.totalPrice > 0) {
@@ -176,6 +184,58 @@ router.post("/:id/contract", requirePerm("contracts:upload"), upload.single("fil
   if (!rows[0]) return res.status(404).json({ error: "Mijoz topilmadi" });
   await audit(null, req.user.id, "upload_contract", "client", id, { name: req.file.originalname, size: req.file.size });
   res.json(toClient(rows[0]));
+}));
+
+// ---- Notarius: notarial tasdiqlangan shartnoma (PDF) ----
+// PDF yuklanganda mijoz "notarius qilingan" deb belgilanadi — PDF'siz belgilab bo'lmaydi.
+
+router.post("/:id/notary", requirePerm("contracts:upload"), upload.single("file"), ah(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!req.file) return res.status(400).json({ error: "Fayl yuborilmadi" });
+  if (req.file.buffer.subarray(0, 5).toString() !== "%PDF-") return res.status(400).json({ error: "Fayl PDF formatida emas" });
+  const date = isDate(req.body?.date) ? req.body.date : new Date().toISOString().slice(0, 10);
+
+  const { rows } = await query(
+    `UPDATE clients SET notary_pdf = $1, notary_pdf_name = $2, notary_pdf_at = now(), notarized = TRUE, notarized_at = $3, updated_at = now()
+     WHERE id = $4 RETURNING ${CLIENT_COLUMNS}`,
+    [req.file.buffer, req.file.originalname, date, id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Mijoz topilmadi" });
+  await audit(null, req.user.id, "notarize", "client", id, { name: rows[0].full_name, date, file: req.file.originalname });
+  res.json(toClient(rows[0]));
+}));
+
+router.delete("/:id/notary", requirePerm("clients:delete"), ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const { rows } = await query(
+    `UPDATE clients SET notary_pdf = NULL, notary_pdf_name = NULL, notary_pdf_at = NULL, notarized = FALSE, notarized_at = NULL, updated_at = now()
+     WHERE id = $1 RETURNING ${CLIENT_COLUMNS}`,
+    [id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Mijoz topilmadi" });
+  await audit(null, req.user.id, "unnotarize", "client", id, { name: rows[0].full_name });
+  res.json(toClient(rows[0]));
+}));
+
+router.get("/:id/notary", ah(async (req, res) => {
+  const { rows } = await query("SELECT notary_pdf, notary_pdf_name, apartment_id FROM clients WHERE id = $1", [Number(req.params.id)]);
+  const row = rows[0];
+  if (!row?.notary_pdf) return res.status(404).json({ error: "Notarial shartnoma yuklanmagan" });
+  const name = row.notary_pdf_name || `Notarial_shartnoma_${row.apartment_id}-xonadon.pdf`;
+  res.removeHeader("Content-Security-Policy");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `${req.query.download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(name)}`);
+  res.setHeader("Cache-Control", "private, max-age=86400");
+  res.send(row.notary_pdf);
+}));
+
+/** Notarius hujjatlari tayyorlanganini jurnalga yozish (hujjat brauzerda yaratiladi). */
+router.post("/:id/notary-docs", requirePerm("clients:edit"), ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const c = (await query("SELECT full_name FROM clients WHERE id = $1", [id])).rows[0];
+  if (!c) return res.status(404).json({ error: "Mijoz topilmadi" });
+  await audit(null, req.user.id, "notary_docs", "client", id, { name: c.full_name, date: req.body?.date });
+  res.json({ ok: true });
 }));
 
 router.get("/:id/contract", ah(async (req, res) => {

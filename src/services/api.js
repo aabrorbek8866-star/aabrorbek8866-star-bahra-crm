@@ -57,3 +57,14 @@ export function uploadContract(clientId, file) {
   form.append("file", file);
   return api(`/clients/${clientId}/contract`, { method: "POST", form });
 }
+
+export function uploadNotaryPdf(clientId, file, date) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("date", date);
+  return api(`/clients/${clientId}/notary`, { method: "POST", form });
+}
+
+export const removeNotary = (clientId) => api(`/clients/${clientId}/notary`, { method: "DELETE" });
+
+export const logNotaryDocs = (clientId, date) => api(`/clients/${clientId}/notary-docs`, { method: "POST", body: { date } });

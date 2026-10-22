@@ -17,7 +17,7 @@ export default function Clients() {
   const list = useMemo(() => {
     const s = latin(q.trim());
     return clients
-      .filter((c) => (filter === "debtors" ? c.isDebtor : filter === "stale" ? c.stale : filter === "noschedule" ? !c.hasSchedule : filter === "ok" ? !c.isDebtor && !c.stale : true))
+      .filter((c) => (filter === "debtors" ? c.isDebtor : filter === "stale" ? c.stale : filter === "noschedule" ? !c.hasSchedule : filter === "notarized" ? c.notarized : filter === "notnotarized" ? !c.notarized : filter === "ok" ? !c.isDebtor && !c.stale : true))
       .filter((c) => !s || [c.fullName, c.phone, c.contractNumber, c.passport, String(c.apartmentId)].some((v) => latin(v).includes(s)))
       .sort((a, b) => a.apartmentId - b.apartmentId);
   }, [clients, q, filter]);
@@ -36,6 +36,8 @@ export default function Clients() {
           <option value="debtors">Qarzdorlar</option>
           <option value="stale">To'lov to'xtagan (30+ kun)</option>
           <option value="noschedule">Grafik kiritilmagan</option>
+          <option value="notarized">Notarius qilingan</option>
+          <option value="notnotarized">Notarius qilinmagan</option>
         </select>
       </div>
 
@@ -48,7 +50,7 @@ export default function Clients() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="th">Xonadon</th><th className="th">Mijoz</th><th className="th">Shartnoma</th>
-                  <th className="th">Oxirgi to'lov</th><th className="th w-48">To'langan</th><th className="th">Holati</th>
+                  <th className="th">Oxirgi to'lov</th><th className="th">Notarius</th><th className="th w-48">To'langan</th><th className="th">Holati</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -61,6 +63,11 @@ export default function Clients() {
                     </td>
                     <td className="td">{c.contractNumber}<div className="text-xs text-slate-400">{fmtDate(c.contractDate)}</div></td>
                     <td className="td whitespace-nowrap">{fmtDate(c.lastPaymentDate)}</td>
+                    <td className="td whitespace-nowrap">
+                      {c.notarized
+                        ? <Badge className="bg-emerald-100 text-emerald-800">✓ {fmtDate(c.notarizedAt)}</Badge>
+                        : <span className="text-xs text-slate-400">qilinmagan</span>}
+                    </td>
                     <td className="td">
                       <ProgressBar value={c.progress} tone={c.isDebtor ? "bg-red-500" : "bg-emerald-500"} />
                       <div className="mt-1 text-xs text-slate-500">{fmtMoney(c.paid)}</div>

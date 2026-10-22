@@ -11,6 +11,9 @@ const ACTIONS = {
   upload_contract: { label: "PDF yuklandi", cls: "bg-violet-100 text-violet-800" },
   send: { label: "Yuborildi", cls: "bg-sky-100 text-sky-800" },
   login: { label: "Kirdi", cls: "bg-slate-100 text-slate-600" },
+  notarize: { label: "Notarius qilindi", cls: "bg-emerald-100 text-emerald-800" },
+  unnotarize: { label: "Notarius bekor qilindi", cls: "bg-red-100 text-red-800" },
+  notary_docs: { label: "Notarius hujjatlari tayyorlandi", cls: "bg-violet-100 text-violet-800" },
   password_change: { label: "Parol o'zgardi", cls: "bg-slate-100 text-slate-600" },
 };
 const ENTITIES = { apartment: "Xonadon", payment: "To'lov", client: "Mijoz", user: "Xodim", excel: "Excel", sms: "SMS" };
@@ -27,6 +30,8 @@ function describe(e) {
   if (e.entity === "client" && e.action === "update") {
     return `${d.name}: ${Object.entries(d.changed ?? {}).map(([k, v]) => `${k}: ${v.from ?? "—"} → ${v.to}`).join("; ") || "o'zgarish yo'q"}`;
   }
+  if (e.entity === "client" && e.action === "notarize") return `${d.name} · ${d.date} · ${d.file}`;
+  if (e.entity === "client" && ["unnotarize", "notary_docs"].includes(e.action)) return d.name ?? "";
   if (e.entity === "client" && e.action !== "upload_contract") return `№${d.apartmentId} · ${d.name} · shartnoma ${d.contract}`;
   if (e.entity === "client") return d.name ?? "";
   if (e.entity === "apartment") return `${d.rooms} xona, ${d.area} m² → №${(d.ids ?? []).join(", ")}`;

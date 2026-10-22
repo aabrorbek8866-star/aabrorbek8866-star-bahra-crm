@@ -3,7 +3,7 @@ import { Loader2, Calculator, Trash2 } from "lucide-react";
 import { fmtMoney, todayIso } from "../../utils/format";
 
 const EMPTY = {
-  fullName: "", phone: "", passport: "", contractNumber: "", contractDate: todayIso(),
+  fullName: "", phone: "", passport: "", passportIssuedBy: "", passportIssuedAt: "", address: "", contractNumber: "", contractDate: todayIso(),
   totalPrice: "", downPayment: "", monthlyPayment: "", installmentMonths: "",
 };
 
@@ -12,6 +12,7 @@ const toForm = (c) =>
   c
     ? {
         fullName: c.fullName, phone: c.phone, passport: c.passport, contractNumber: c.contractNumber, contractDate: c.contractDate,
+        passportIssuedBy: c.passportIssuedBy ?? "", passportIssuedAt: c.passportIssuedAt ?? "", address: c.address ?? "",
         totalPrice: c.totalPrice ? String(c.totalPrice) : "", downPayment: c.downPayment ? String(c.downPayment) : "",
         monthlyPayment: c.monthlyPayment ? String(c.monthlyPayment) : "", installmentMonths: c.installmentMonths ? String(c.installmentMonths) : "",
       }
@@ -67,7 +68,10 @@ export default function ClientForm({ client, onSubmit, onDelete, onCancel }) {
       <Section title="Mijoz">
         <Field label="F.I.O" span><input className="input" value={form.fullName} onChange={set("fullName")} autoFocus /></Field>
         <Field label="Telefon"><input className="input" value={form.phone} onChange={set("phone")} placeholder="+998 90 123-45-67" /></Field>
-        <Field label="Pasport"><input className="input" value={form.passport} onChange={set("passport")} placeholder="AA 1234567" /></Field>
+        <Field label="Pasport (seriya va raqam)"><input className="input" value={form.passport} onChange={set("passport")} placeholder="AA 1234567" /></Field>
+        <Field label="Pasport kim tomonidan berilgan"><input className="input" value={form.passportIssuedBy} onChange={set("passportIssuedBy")} placeholder="Навоий вилояти Зарафшон шаҳар ИИБ" /></Field>
+        <Field label="Pasport berilgan sana"><input type="date" className="input" value={form.passportIssuedAt} onChange={set("passportIssuedAt")} /></Field>
+        <Field label="Manzil (ro'yxatdan o'tgan)" span><input className="input" value={form.address} onChange={set("address")} placeholder="Навоий вилояти Зарафшон шаҳар, ..." /></Field>
       </Section>
 
       <Section title="Shartnoma">

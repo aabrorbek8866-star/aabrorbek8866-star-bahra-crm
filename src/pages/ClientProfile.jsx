@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Phone, IdCard, FileSignature, CalendarClock, Home, Scale, Pencil, FileSpreadsheet, Download } from "lucide-react";
+import { ArrowLeft, Plus, Phone, IdCard, FileSignature, CalendarClock, Home, Scale, Pencil, FileSpreadsheet, Download, MapPin } from "lucide-react";
 import { useCrm } from "../store/CrmContext";
 import { PageHeader, Modal, ProgressBar, Badge, EmptyState } from "../components/ui";
 import PaymentForm from "../components/payments/PaymentForm";
 import PaymentList from "../components/payments/PaymentList";
 import ContractUpload from "../components/clients/ContractUpload";
 import ClientForm from "../components/clients/ClientForm";
+import NotaryCard from "../components/clients/NotaryCard";
 import PaymentScheduleImport from "../components/payments/PaymentScheduleImport";
 import { downloadPaymentSchedule } from "../utils/excel";
 import { useAgents } from "../components/ai/AgentContext";
@@ -80,7 +81,13 @@ export default function ClientProfile() {
             </div>
             <dl className="space-y-3 text-sm">
               <Row icon={Phone} label="Telefon" value={<a className="text-brand-700 hover:underline" href={`tel:${client.phone.replace(/\s|-/g, "")}`}>{client.phone || "—"}</a>} />
-              <Row icon={IdCard} label="Pasport" value={client.passport || "—"} />
+              <Row icon={IdCard} label="Pasport" value={<>
+                {client.passport || "—"}
+                {(client.passportIssuedBy || client.passportIssuedAt) && (
+                  <span className="block text-xs text-slate-500">{client.passportIssuedBy}{client.passportIssuedAt ? `, ${fmtDate(client.passportIssuedAt)}` : ""}</span>
+                )}
+              </>} />
+              <Row icon={MapPin} label="Manzil" value={client.address || "—"} />
               <Row icon={FileSignature} label="Shartnoma" value={`${client.contractNumber} (${fmtDate(client.contractDate)})`} />
               <Row icon={CalendarClock} label="Oxirgi to'lov" value={fmtDate(client.lastPaymentDate)} />
               <Row icon={Home} label="Xonadon" value={apt ? <>
@@ -112,6 +119,7 @@ export default function ClientProfile() {
             )}
           </div>
 
+          <NotaryCard client={client} can={can} onClientChange={replaceClient} />
           <ContractUpload client={client} canUpload={can("contracts:upload")} onUploaded={replaceClient} />
         </div>
 
