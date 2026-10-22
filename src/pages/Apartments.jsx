@@ -1,18 +1,45 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Pencil, Loader2 } from "lucide-react";
 import { useCrm } from "../store/CrmContext";
+import { useAuth } from "../store/AuthContext";
 import { BUILDING } from "../data/schema";
-import { PageHeader } from "../components/ui";
+import { PageHeader, Modal } from "../components/ui";
+import { api } from "../services/api";
 import { fmtShort } from "../utils/format";
 
 // "Shaxmatka" ko'rinishi: har podyezd uchun 7 qavat × 4 xonadon
 export default function Apartments() {
-  const { apartments, clientById } = useCrm();
+  const { apartments, clientById, reload } = useCrm();
+  const { can } = useAuth();
   const navigate = useNavigate();
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
   const sold = apartments.filter((a) => a.status === "sold").length;
+  const missing = apartments.filter((a) => !a.area).length;
+
+  const onTile = (a, c) => {
+    if (editMode) setEditing(a);
+    else if (c) navigate(`/mijozlar/${c.id}`);
+  };
 
   return (
     <>
-      <PageHeader title="Xonadonlar shaxmatkasi" subtitle={`${sold} ta sotilgan · ${apartments.length - sold} ta bo'sh`} />
+      <PageHeader
+        title="Xonadonlar shaxmatkasi"
+        subtitle={`${sold} ta sotilgan · ${apartments.length - sold} ta bo'sh${missing ? ` · ${missing} tasining maydoni kiritilmagan` : ""}`}
+        actions={can("apartments:edit") && (
+          <button className={editMode ? "btn-primary" : "btn-secondary"} onClick={() => setEditMode(!editMode)}>
+            <Pencil size={16} /> {editMode ? "Tahrirlashni tugatish" : "Xonadonlarni tahrirlash"}
+          </button>
+        )}
+      />
+      {editMode && (
+        <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
+          Tahrirlash rejimi: istalgan xonadonni bosing va xonalar soni hamda maydonini kiriting.
+          Bir xil rejali qavatlar uchun "barcha qavatlarga qo'llash" ni tanlang.
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap gap-4 text-xs text-slate-600">
         <Legend cls="bg-emerald-500" label="Sotilgan, to'lov o'z vaqtida" />
         <Legend cls="bg-red-500" label="Sotilgan, qarzdor" />
@@ -40,16 +67,16 @@ export default function Apartments() {
                         return (
                           <button
                             key={a.id}
-                            disabled={!c}
-                            onClick={() => c && navigate(`/mijozlar/${c.id}`)}
+                            disabled={!c && !editMode}
+                            onClick={() => onTile(a, c)}
                             title={c ? `${c.fullName}\nTo'langan: ${c.progress.toFixed(0)}%` : "Bo'sh xonadon"}
-                            className={`rounded-lg px-2 py-2 text-left transition disabled:cursor-default ${cls}`}
+                            className={`rounded-lg px-2 py-2 text-left transition disabled:cursor-default ${cls} ${editMode ? "ring-2 ring-brand-300 ring-offset-1" : ""}`}
                           >
                             <div className="flex items-baseline justify-between">
                               <span className="text-sm font-bold">№{a.id}</span>
-                              <span className="text-[10px] opacity-80">{a.rooms}x</span>
+                              <span className="text-[10px] opacity-80">{a.rooms ? `${a.rooms} xona` : "—"}</span>
                             </div>
-                            <div className="text-[10px] opacity-80">{a.area} m²</div>
+                            <div className="text-[10px] opacity-80">{a.area ? `${a.area} m²` : "maydon —"}</div>
                             {c && <div className="truncate text-[10px] opacity-90">{c.isDebtor ? `qarz ${fmtShort(c.debt)}` : `${c.progress.toFixed(0)}%`}</div>}
                           </button>
                         );
@@ -61,7 +88,76 @@ export default function Apartments() {
           </div>
         ))}
       </div>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing ? `№${editing.id} xonadon — ${editing.entrance}-podyezd, ${editing.floor}-qavat` : ""}>
+        {editing && <ApartmentForm apartment={editing} onDone={async () => { await reload(); setEditing(null); }} />}
+      </Modal>
     </>
+  );
+}
+
+function ApartmentForm({ apartment, onDone }) {
+  const [form, setForm] = useState({
+    rooms: apartment.rooms ? String(apartment.rooms) : "",
+    area: apartment.area ? String(apartment.area) : "",
+    scope: "entrance",
+  });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const position = ((apartment.id - 1) % BUILDING.perFloor) + 1;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/apartments/${apartment.id}`, {
+        method: "PATCH",
+        body: { rooms: Number(form.rooms), area: Number(form.area.replace(",", ".")), scope: form.scope },
+      });
+      await onDone();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  const scopes = [
+    { id: "one", label: `Faqat №${apartment.id} xonadon` },
+    { id: "entrance", label: `${apartment.entrance}-podyezdning barcha 7 qavatida (qavatdagi ${position}-o'rin)` },
+    { id: "building", label: `Ikkala podyezdning barcha qavatlarida (${position}-o'rin, 14 ta xonadon)` },
+  ];
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="label" htmlFor="apt-rooms">Xonalar soni</label>
+          <input id="apt-rooms" type="number" min="1" max="10" className="input" value={form.rooms} onChange={(e) => setForm({ ...form, rooms: e.target.value })} autoFocus />
+        </div>
+        <div>
+          <label className="label" htmlFor="apt-area">Maydon (m²)</label>
+          <input id="apt-area" inputMode="decimal" className="input" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="77.8" />
+        </div>
+      </div>
+      <fieldset>
+        <legend className="label">Qaysi xonadonlarga qo'llash</legend>
+        <div className="space-y-2">
+          {scopes.map((s) => (
+            <label key={s.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${form.scope === s.id ? "border-brand-500 bg-brand-50" : "border-slate-200"}`}>
+              <input type="radio" name="scope" checked={form.scope === s.id} onChange={() => setForm({ ...form, scope: s.id })} />
+              {s.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <div className="flex justify-end">
+        <button className="btn-primary" disabled={busy || !form.rooms || !form.area}>
+          {busy && <Loader2 size={16} className="animate-spin" />} Saqlash
+        </button>
+      </div>
+    </form>
   );
 }
 

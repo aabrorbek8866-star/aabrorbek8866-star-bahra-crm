@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   "import":           ["admin"],
   "users:manage":     ["admin"],
   "audit:view":       ["admin"],
+  "apartments:edit":  ["admin"],
 };
 
 export const permissionsFor = (role) =>

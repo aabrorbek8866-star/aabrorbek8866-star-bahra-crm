@@ -17,6 +17,7 @@ import importRouter from "./routes/import.js";
 import smsRouter from "./routes/sms.js";
 import aiRouter from "./routes/ai.js";
 import auditRouter from "./routes/audit.js";
+import apartmentsRouter from "./routes/apartments.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -51,6 +52,7 @@ app.use("/api/sms", smsRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/audit", auditRouter);
+app.use("/api/apartments", apartmentsRouter);
 app.use("/api", (_req, res) => res.status(404).json({ error: "Topilmadi" }));
 
 // Ishlab chiqarishda tayyor frontend (vite build) ham shu serverdan beriladi

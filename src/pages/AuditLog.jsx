@@ -13,7 +13,7 @@ const ACTIONS = {
   login: { label: "Kirdi", cls: "bg-slate-100 text-slate-600" },
   password_change: { label: "Parol o'zgardi", cls: "bg-slate-100 text-slate-600" },
 };
-const ENTITIES = { payment: "To'lov", client: "Mijoz", user: "Xodim", excel: "Excel", sms: "SMS" };
+const ENTITIES = { apartment: "Xonadon", payment: "To'lov", client: "Mijoz", user: "Xodim", excel: "Excel", sms: "SMS" };
 
 function describe(e) {
   const d = e.details ?? {};
@@ -24,6 +24,7 @@ function describe(e) {
   if (e.entity === "excel") return `${d.mode === "replace" ? "To'liq almashtirish" : "Yangilash"}: ${d.clients} mijoz, ${d.inserted} yangi to'lov`;
   if (e.entity === "sms") return `${d.ok} / ${d.count} ta yuborildi`;
   if (e.entity === "client") return d.name ?? "";
+  if (e.entity === "apartment") return `${d.rooms} xona, ${d.area} m² → №${(d.ids ?? []).join(", ")}`;
   if (e.entity === "user") return [d.login, d.role, d.active === false && "o'chirildi", d.passwordReset && "parol yangilandi"].filter(Boolean).join(" · ");
   return "";
 }
