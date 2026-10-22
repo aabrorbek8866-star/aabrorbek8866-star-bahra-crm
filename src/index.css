@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .card { @apply rounded-2xl border border-slate-200 bg-white shadow-sm; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
+  .btn-secondary { @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50; }
+  .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700; }
+  .input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100; }
+  .label { @apply mb-1 block text-xs font-medium text-slate-600; }
+  .th { @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
+  .td { @apply px-4 py-3 text-sm text-slate-700; }
+}
+
+/* AI javoblaridagi markdown */
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { @apply mb-1 mt-3 font-semibold text-slate-900; }
+.prose-chat h1 { @apply text-base; } .prose-chat h2 { @apply text-[15px]; } .prose-chat h3 { @apply text-sm; }
+.prose-chat p { @apply my-1.5; }
+.prose-chat ul { @apply my-1.5 list-disc pl-5; } .prose-chat ol { @apply my-1.5 list-decimal pl-5; }
+.prose-chat table { @apply my-2 w-full border-collapse text-xs; }
+.prose-chat th, .prose-chat td { @apply border border-slate-200 px-2 py-1 text-left; }
+.prose-chat code { @apply rounded bg-slate-100 px-1 text-xs; }
+.prose-chat strong { @apply font-semibold text-slate-900; }

@@ -1,0 +1,32 @@
+# Har kuni tunda bazaning zaxira nusxasi (pg_dump) olinadi va GitHub'da 30 kun saqlanadi.
+# Sozlash: GitHub repo → Settings → Secrets and variables → Actions → New secret:
+#   DATABASE_URL = Neon connection string
+# MUHIM: repozitoriy "Private" bo'lishi shart — zaxirada mijozlarning shaxsiy ma'lumotlari bor.
+name: Bazani zaxiralash
+
+on:
+  schedule:
+    - cron: "17 21 * * *"   # har kuni 02:17 (Toshkent vaqti)
+  workflow_dispatch: {}      # qo'lda ishga tushirish ham mumkin
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PostgreSQL 16 klientini o'rnatish
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16
+
+      - name: pg_dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: /usr/lib/postgresql/16/bin/pg_dump "$DATABASE_URL" --format=custom --no-owner --file=bahra_crm_$(date +%F).dump
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bahra-crm-backup
+          path: "*.dump"
+          retention-days: 30

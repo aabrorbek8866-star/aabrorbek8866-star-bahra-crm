@@ -1,0 +1,35 @@
+# Render Blueprint: Dashboard → New → Blueprint → shu repozitoriyni tanlang.
+# Baza Render'da emas, Neon'da (Render'ning bepul bazasi 30 kunda o'chiriladi).
+services:
+  - type: web
+    name: bahra-crm
+    runtime: node
+    plan: free
+    region: frankfurt          # O'zbekistonga eng yaqin hudud
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL       # Neon connection string — qo'lda kiritiladi
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_LOGIN
+        value: admin
+      - key: ADMIN_PASSWORD     # rahbar paroli — qo'lda kiritiladi
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: claude-opus-5-5
+      - key: ESKIZ_EMAIL
+        sync: false
+      - key: ESKIZ_PASSWORD
+        sync: false
