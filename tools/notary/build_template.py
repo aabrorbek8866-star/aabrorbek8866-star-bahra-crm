@@ -60,7 +60,16 @@ apply(D, {
 }, "D")
 # Pasport kim tomonidan va qachon berilgani (qora matn, lekin har mijozda boshqa)
 replace_in_run(D, 6, 11, " Бухоро  вилояти Гиждивон тумани     ИИБ томонидан 23.03.2014 йилда",
-               " {pasportKimTomonidan} томонидан {pasportSanasi} йилда")
+               " (ЖШШИР {jshshir}) {pasportKimTomonidan} томонидан {pasportSanasi} йилда")
+# Rekvizitlar jadvalida pasport qatoridan keyin JSHSHIR qatori (indekslar o'zgarmasligi uchun eng oxirida qo'shiladi)
+pass_par = paras(D)[54]
+jsh = copy.deepcopy(pass_par._p)
+pass_par._p.addnext(jsh)
+jsh_par = Paragraph(jsh, D)
+for r in jsh_par.runs[1:]:
+    r._r.getparent().remove(r._r)
+jsh_par.runs[0].text = " ЖШШИР: {jshshir}"
+jsh_par.runs[0].font.color.rgb = None
 
 # ---------- C: umumiy yig'ilish bayonlari ----------
 C = docx.Document("m_C.docx")

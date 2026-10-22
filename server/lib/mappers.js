@@ -3,7 +3,7 @@
 export const CLIENT_COLUMNS = `id, apartment_id, full_name, passport, phone, contract_number, contract_date,
   last_payment_date, total_price, down_payment, monthly_payment, installment_months,
   contract_pdf_name, contract_pdf_at, (contract_pdf IS NOT NULL) AS has_contract,
-  full_name_cyr, address, passport_issued_by, passport_issued_at, notarized, notarized_at,
+  full_name_cyr, jshshir, address, passport_issued_by, passport_issued_at, notarized, notarized_at,
   notary_pdf_name, notary_pdf_at, (notary_pdf IS NOT NULL) AS has_notary_pdf`;
 
 export const toClient = (r) => ({
@@ -23,6 +23,7 @@ export const toClient = (r) => ({
   // URL'ga yuklangan vaqt qo'shiladi — yangi versiya yuklanganda brauzer keshi eskisini ko'rsatmasin
   contractPdfUrl: r.has_contract ? `/api/clients/${r.id}/contract?v=${new Date(r.contract_pdf_at).getTime()}` : null,
   fullNameCyr: r.full_name_cyr,
+  jshshir: r.jshshir,
   address: r.address,
   passportIssuedBy: r.passport_issued_by,
   passportIssuedAt: r.passport_issued_at,

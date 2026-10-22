@@ -24,6 +24,7 @@ const FIELDS = {
   monthlyPayment: "monthly_payment",
   installmentMonths: "installment_months",
   fullNameCyr: "full_name_cyr",
+  jshshir: "jshshir",
   address: "address",
   passportIssuedBy: "passport_issued_by",
   passportIssuedAt: "passport_issued_at",
@@ -36,6 +37,7 @@ function validateClient(body, partial) {
   for (const k of ["fullName", "passport", "phone", "contractNumber"]) if (!partial || has(k)) v[k] = String(body[k] ?? "").trim();
   // Notarius hujjatlari uchun (ixtiyoriy)
   for (const k of ["fullNameCyr", "address", "passportIssuedBy"]) if (has(k)) v[k] = String(body[k] ?? "").trim();
+  if (has("jshshir")) v.jshshir = String(body.jshshir ?? "").replace(/\D/g, "");
   if (has("passportIssuedAt")) v.passportIssuedAt = body.passportIssuedAt || null;
   if (!partial || has("contractDate")) v.contractDate = body.contractDate;
   for (const k of ["totalPrice", "downPayment", "monthlyPayment"]) if (!partial || has(k)) v[k] = money(body[k]);
@@ -45,6 +47,7 @@ function validateClient(body, partial) {
   if (v.contractNumber !== undefined && !v.contractNumber) return { error: "Shartnoma raqami kiritilmagan" };
   if (v.contractDate !== undefined && !isDate(v.contractDate)) return { error: "Shartnoma sanasi noto'g'ri" };
   if (v.passportIssuedAt && !isDate(v.passportIssuedAt)) return { error: "Pasport berilgan sana noto'g'ri" };
+  if (v.jshshir && v.jshshir.length !== 14) return { error: "JSHSHIR 14 ta raqamdan iborat bo'lishi kerak" };
   for (const k of ["totalPrice", "downPayment", "monthlyPayment"]) if (v[k] !== undefined && v[k] < 0) return { error: "Summalar manfiy bo'lishi mumkin emas" };
   if (v.installmentMonths !== undefined && (v.installmentMonths < 0 || v.installmentMonths > 240)) return { error: "Muddat 0–240 oy oralig'ida bo'lishi kerak" };
   if (v.totalPrice !== undefined && v.downPayment !== undefined && v.downPayment > v.totalPrice && v.totalPrice > 0) {

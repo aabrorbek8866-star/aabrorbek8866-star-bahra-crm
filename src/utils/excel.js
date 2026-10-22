@@ -47,6 +47,9 @@ export const toIsoDate = (v) => {
   return m ? `${m[1]}-${pad(m[2])}-${pad(m[3])}` : null;
 };
 
+// JSHSHIR 14 xonali — Excel uni katta son deb o'qib qolsa ham raqamlari saqlanadi
+const digitsOnly = (v) => (typeof v === "number" ? v.toFixed(0) : String(v ?? "")).replace(/\D/g, "");
+
 const fmtDmy = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : "");
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -106,6 +109,7 @@ const MAIN_COLUMNS = {
   address:           ["manzil", "manzili", "yashash manzili"],
   passportIssuedBy:  ["pasport kim tomonidan berilgan", "kim tomonidan berilgan", "pasport bergan organ"],
   passportIssuedAt:  ["pasport berilgan sana", "berilgan sana"],
+  jshshir:           ["jshshir", "jshir", "jshshr", "pinfl", "жшшир", "jshshir (pinfl)"],
 };
 
 // ---------- To'lovlar jadvali ("N-xonadon" / to'lov grafigi) ----------
@@ -267,7 +271,10 @@ export async function parseCrmWorkbook(file) {
       address: String(get(row, "address")).trim(),
       passportIssuedBy: String(get(row, "passportIssuedBy")).trim(),
       passportIssuedAt: toIsoDate(get(row, "passportIssuedAt")),
+      jshshir: digitsOnly(get(row, "jshshir")),
     });
+    const jsh = digitsOnly(get(row, "jshshir"));
+    if (jsh && jsh.length !== 14) warnings.push(`№${num}: JSHSHIR ${jsh.length} xonali ("${get(row, "jshshir")}") — 14 xonali bo'lishi kerak, olinmadi.`);
   });
 
   for (const [cn, nums] of contractCount) {
@@ -307,7 +314,7 @@ const MAIN_HEADER = [
   "Shartnoma raqami", "Shartnoma sanasi", "Shartnoma summasi", "Ism Familya",
   // Qo'shimcha (ixtiyoriy) ustunlar — qarz muddatini kuzatish va SMS uchun
   "Xonalar soni", "Telefon", "Pasport", "Boshlang'ich to'lov", "Oylik to'lov", "Muddat (oy)",
-  "Manzil", "Pasport kim tomonidan berilgan", "Pasport berilgan sana", "Notarius",
+  "Manzil", "Pasport kim tomonidan berilgan", "Pasport berilgan sana", "JSHSHIR", "Notarius",
 ];
 
 /** Faylingizdagi tartib: har qavatda avval 1-podyezd (1,2,3,4), keyin 2-podyezd (29,30,31,32). */
@@ -352,12 +359,13 @@ function buildMainSheet(apartments, clientByApt) {
       c?.address ?? "",
       c?.passportIssuedBy ?? "",
       c ? fmtDmy(c.passportIssuedAt) : "",
+      c?.jshshir ?? "",
       c ? (c.notarized ? `ha, ${fmtDmy(c.notarizedAt)}` : "yo'q") : "",
     ]);
   });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!merges"] = merges;
-  ws["!cols"] = [8, 7, 12, 12, 10, 10, 11, 12, 14, 34, 8, 18, 13, 14, 12, 9, 34, 30, 12, 14].map((wch) => ({ wch }));
+  ws["!cols"] = [8, 7, 12, 12, 10, 10, 11, 12, 14, 34, 8, 18, 13, 14, 12, 9, 34, 30, 12, 16, 14].map((wch) => ({ wch }));
   return ws;
 }
 

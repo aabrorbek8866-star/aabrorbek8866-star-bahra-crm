@@ -123,7 +123,7 @@ export function splitPassport(passport) {
 
 /**
  * Shablon o'zgaruvchilari. Shartnoma raqami va sanasi — shartnomadan, qolgan sanalar — hujjat tayyorlangan kun.
- * @param {object} p — { fio (kirill), pasportSeriya, pasportRaqam, pasportKimTomonidan, pasportSanasi (yyyy-mm-dd),
+ * @param {object} p — { fio (kirill), pasportSeriya, pasportRaqam, jshshir, pasportKimTomonidan, pasportSanasi (yyyy-mm-dd),
  *                      manzil, xonadon, podyezd, qavat, xonalar, umumiyMaydon, yashashMaydon, narx,
  *                      shartnomaRaqami, shartnomaSanasi (yyyy-mm-dd), sana (yyyy-mm-dd) }
  */
@@ -135,6 +135,7 @@ export function notaryTemplateData(p) {
     imzo: signatureName(p.fio),
     pasportSeriya: p.pasportSeriya,
     pasportRaqam: p.pasportRaqam,
+    jshshir: p.jshshir ?? "",
     pasportKimTomonidan: p.pasportKimTomonidan,
     pasportSanasi: dmy(p.pasportSanasi),
     manzil: p.manzil,

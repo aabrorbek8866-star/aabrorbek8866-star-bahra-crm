@@ -3,7 +3,7 @@ import { Loader2, Calculator, Trash2 } from "lucide-react";
 import { fmtMoney, todayIso } from "../../utils/format";
 
 const EMPTY = {
-  fullName: "", phone: "", passport: "", passportIssuedBy: "", passportIssuedAt: "", address: "", contractNumber: "", contractDate: todayIso(),
+  fullName: "", phone: "", passport: "", passportIssuedBy: "", passportIssuedAt: "", jshshir: "", address: "", contractNumber: "", contractDate: todayIso(),
   totalPrice: "", downPayment: "", monthlyPayment: "", installmentMonths: "",
 };
 
@@ -12,7 +12,7 @@ const toForm = (c) =>
   c
     ? {
         fullName: c.fullName, phone: c.phone, passport: c.passport, contractNumber: c.contractNumber, contractDate: c.contractDate,
-        passportIssuedBy: c.passportIssuedBy ?? "", passportIssuedAt: c.passportIssuedAt ?? "", address: c.address ?? "",
+        passportIssuedBy: c.passportIssuedBy ?? "", passportIssuedAt: c.passportIssuedAt ?? "", jshshir: c.jshshir ?? "", address: c.address ?? "",
         totalPrice: c.totalPrice ? String(c.totalPrice) : "", downPayment: c.downPayment ? String(c.downPayment) : "",
         monthlyPayment: c.monthlyPayment ? String(c.monthlyPayment) : "", installmentMonths: c.installmentMonths ? String(c.installmentMonths) : "",
       }
@@ -40,6 +40,7 @@ export default function ClientForm({ client, onSubmit, onDelete, onCancel }) {
     setError("");
     if (form.fullName.trim().length < 3) return setError("F.I.O ni kiriting");
     if (!form.contractNumber.trim()) return setError("Shartnoma raqamini kiriting");
+    if (form.jshshir && form.jshshir.length !== 14) return setError("JSHSHIR 14 ta raqamdan iborat bo'lishi kerak");
     setBusy(true);
     try {
       await onSubmit({
@@ -71,6 +72,10 @@ export default function ClientForm({ client, onSubmit, onDelete, onCancel }) {
         <Field label="Pasport (seriya va raqam)"><input className="input" value={form.passport} onChange={set("passport")} placeholder="AA 1234567" /></Field>
         <Field label="Pasport kim tomonidan berilgan"><input className="input" value={form.passportIssuedBy} onChange={set("passportIssuedBy")} placeholder="Навоий вилояти Зарафшон шаҳар ИИБ" /></Field>
         <Field label="Pasport berilgan sana"><input type="date" className="input" value={form.passportIssuedAt} onChange={set("passportIssuedAt")} /></Field>
+        <Field label="JSHSHIR (14 xonali)" span>
+          <input inputMode="numeric" maxLength={14} className="input font-mono tracking-wider" value={form.jshshir} onChange={(e) => setForm({ ...form, jshshir: digits(e.target.value).slice(0, 14) })} placeholder="12345678901234" />
+          {form.jshshir && form.jshshir.length !== 14 && <p className="mt-1 text-xs text-amber-700">{form.jshshir.length} / 14 raqam</p>}
+        </Field>
         <Field label="Manzil (ro'yxatdan o'tgan)" span><input className="input" value={form.address} onChange={set("address")} placeholder="Навоий вилояти Зарафшон шаҳар, ..." /></Field>
       </Section>
 

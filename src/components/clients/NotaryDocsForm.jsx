@@ -13,6 +13,7 @@ const initial = (c) => {
     fio: c.fullNameCyr || toCyrillic(c.fullName),
     pasportSeriya: pass.seriya,
     pasportRaqam: pass.raqam,
+    jshshir: c.jshshir ?? "",
     pasportKimTomonidan: c.passportIssuedBy ?? "",
     pasportSanasi: c.passportIssuedAt ?? "",
     manzil: c.address ?? "",
@@ -53,11 +54,12 @@ export default function NotaryDocsForm({ client, onClientChange, onClose }) {
   );
 
   const missing = [
-    ["fio", "F.I.O (kirill)"], ["pasportSeriya", "Pasport seriyasi"], ["pasportRaqam", "Pasport raqami"],
+    ["fio", "F.I.O (kirill)"], ["pasportSeriya", "Pasport seriyasi"], ["pasportRaqam", "Pasport raqami"], ["jshshir", "JSHSHIR"],
     ["pasportKimTomonidan", "Pasport kim tomonidan berilgan"], ["pasportSanasi", "Pasport berilgan sana"],
     ["manzil", "Manzil"], ["xonalar", "Xonalar soni"], ["umumiyMaydon", "Umumiy maydon"], ["yashashMaydon", "Yashash maydoni"],
   ].filter(([k]) => !String(form[k] ?? "").trim()).map(([, label]) => label);
   if (!client.totalPrice) missing.push("Shartnoma summasi (mijoz ma'lumotlarida)");
+  if (form.jshshir && form.jshshir.length !== 14) missing.push(`JSHSHIR to'liq emas (${form.jshshir.length} / 14)`);
 
   const generate = async () => {
     setBusy(true);
@@ -91,6 +93,7 @@ export default function NotaryDocsForm({ client, onClientChange, onClose }) {
         body: {
           fullNameCyr: form.fio.trim(),
           passport: `${form.pasportSeriya.trim()} ${form.pasportRaqam.trim()}`,
+          jshshir: form.jshshir,
           passportIssuedBy: form.pasportKimTomonidan.trim(),
           passportIssuedAt: form.pasportSanasi,
           address: form.manzil.trim(),
@@ -136,6 +139,10 @@ export default function NotaryDocsForm({ client, onClientChange, onClose }) {
         <F label="F.I.O" span><input className="input" value={form.fio} onChange={set("fio")} /></F>
         <F label="Pasport seriyasi"><input className="input" value={form.pasportSeriya} onChange={set("pasportSeriya")} placeholder="АА" /></F>
         <F label="Pasport raqami"><input className="input" value={form.pasportRaqam} onChange={set("pasportRaqam")} placeholder="7795929" /></F>
+        <F label="JSHSHIR (14 xonali)" span>
+          <input inputMode="numeric" maxLength={14} className="input font-mono tracking-wider" value={form.jshshir}
+            onChange={(e) => setForm({ ...form, jshshir: e.target.value.replace(/\D/g, "").slice(0, 14) })} placeholder="12345678901234" />
+        </F>
         <F label="Kim tomonidan berilgan" span><input className="input" value={form.pasportKimTomonidan} onChange={set("pasportKimTomonidan")} placeholder="Бухоро вилояти Гиждувон тумани ИИБ" /></F>
         <F label="Berilgan sana"><input type="date" className="input" value={form.pasportSanasi} onChange={set("pasportSanasi")} /></F>
         <F label="Manzil"><input className="input" value={form.manzil} onChange={set("manzil")} placeholder="Навоий вилояти Зарафшон шаҳар" /></F>

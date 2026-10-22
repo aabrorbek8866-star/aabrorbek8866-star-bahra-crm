@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Phone, IdCard, FileSignature, CalendarClock, Home, Scale, Pencil, FileSpreadsheet, Download, MapPin } from "lucide-react";
+import { ArrowLeft, Plus, Phone, IdCard, FileSignature, CalendarClock, Home, Scale, Pencil, FileSpreadsheet, Download, MapPin, Fingerprint } from "lucide-react";
 import { useCrm } from "../store/CrmContext";
 import { PageHeader, Modal, ProgressBar, Badge, EmptyState } from "../components/ui";
 import PaymentForm from "../components/payments/PaymentForm";
@@ -87,6 +87,7 @@ export default function ClientProfile() {
                   <span className="block text-xs text-slate-500">{client.passportIssuedBy}{client.passportIssuedAt ? `, ${fmtDate(client.passportIssuedAt)}` : ""}</span>
                 )}
               </>} />
+              <Row icon={Fingerprint} label="JSHSHIR" value={client.jshshir ? <span className="font-mono">{client.jshshir}</span> : "—"} />
               <Row icon={MapPin} label="Manzil" value={client.address || "—"} />
               <Row icon={FileSignature} label="Shartnoma" value={`${client.contractNumber} (${fmtDate(client.contractDate)})`} />
               <Row icon={CalendarClock} label="Oxirgi to'lov" value={fmtDate(client.lastPaymentDate)} />

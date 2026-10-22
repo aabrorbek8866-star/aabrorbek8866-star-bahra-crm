@@ -59,8 +59,8 @@ router.post("/", requirePerm("import"), ah(async (req, res) => {
       const { rows } = await db.query(
         `INSERT INTO clients (apartment_id, full_name, passport, phone, contract_number, contract_date, last_payment_date,
                               total_price, down_payment, monthly_payment, installment_months,
-                              address, passport_issued_by, passport_issued_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$13,$14,$15)
+                              address, passport_issued_by, passport_issued_at, jshshir)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$13,$14,$15,$16)
          ON CONFLICT (apartment_id) DO UPDATE SET
            full_name          = CASE WHEN $12 THEN clients.full_name ELSE EXCLUDED.full_name END,
            passport           = COALESCE(NULLIF(EXCLUDED.passport, ''), clients.passport),
@@ -75,6 +75,7 @@ router.post("/", requirePerm("import"), ah(async (req, res) => {
            address            = COALESCE(NULLIF(EXCLUDED.address, ''), clients.address),
            passport_issued_by = COALESCE(NULLIF(EXCLUDED.passport_issued_by, ''), clients.passport_issued_by),
            passport_issued_at = COALESCE(EXCLUDED.passport_issued_at, clients.passport_issued_at),
+           jshshir            = COALESCE(NULLIF(EXCLUDED.jshshir, ''), clients.jshshir),
            updated_at = now()
          RETURNING id`,
         [c.apartmentId, c.fullName.trim(), c.passport ?? "", c.phone ?? "", String(c.contractNumber).trim(), c.contractDate,
@@ -82,7 +83,8 @@ router.post("/", requirePerm("import"), ah(async (req, res) => {
           int(c.monthlyPayment), int(c.installmentMonths),
           // Excelda ism yo'q bo'lsa ("Ism kiritilmagan ...") — saytda kiritilgan ism saqlanadi
           c.fullName.startsWith("Ism kiritilmagan"),
-          String(c.address ?? "").trim(), String(c.passportIssuedBy ?? "").trim(), isDate(c.passportIssuedAt) ? c.passportIssuedAt : null],
+          String(c.address ?? "").trim(), String(c.passportIssuedBy ?? "").trim(), isDate(c.passportIssuedAt) ? c.passportIssuedAt : null,
+          /^\d{14}$/.test(String(c.jshshir ?? "")) ? String(c.jshshir) : ""],
       );
       idByApartment.set(c.apartmentId, rows[0].id);
       await db.query("UPDATE apartments SET status = 'sold' WHERE id = $1", [c.apartmentId]);
