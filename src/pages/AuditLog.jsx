@@ -20,9 +20,14 @@ function describe(e) {
   if (e.entity === "payment" && e.action === "update") {
     return Object.keys(d.after ?? {}).map((k) => `${k}: ${fmt(k, d.before?.[k])} → ${fmt(k, d.after[k])}`).join("; ");
   }
+  if (e.entity === "payment" && e.action === "import") return `Mijoz #${e.entityId}: ${d.inserted} ta to'lov Excel'dan qo'shildi`;
   if (e.entity === "payment") return `${fmtMoney(d.amount)} · ${d.date} · ${d.comment ?? ""}`;
   if (e.entity === "excel") return `${d.mode === "replace" ? "To'liq almashtirish" : "Yangilash"}: ${d.clients} mijoz, ${d.inserted} yangi to'lov`;
   if (e.entity === "sms") return `${d.ok} / ${d.count} ta yuborildi`;
+  if (e.entity === "client" && e.action === "update") {
+    return `${d.name}: ${Object.entries(d.changed ?? {}).map(([k, v]) => `${k}: ${v.from ?? "—"} → ${v.to}`).join("; ") || "o'zgarish yo'q"}`;
+  }
+  if (e.entity === "client" && e.action !== "upload_contract") return `№${d.apartmentId} · ${d.name} · shartnoma ${d.contract}`;
   if (e.entity === "client") return d.name ?? "";
   if (e.entity === "apartment") return `${d.rooms} xona, ${d.area} m² → №${(d.ids ?? []).join(", ")}`;
   if (e.entity === "user") return [d.login, d.role, d.active === false && "o'chirildi", d.passwordReset && "parol yangilandi"].filter(Boolean).join(" · ");

@@ -48,6 +48,11 @@ export function buildAiContext(crm, agent) {
     qarzdorlik: {
       qarzdorlar_soni: debtors.length,
       jami_qarz: debtors.reduce((s, c) => s + c.debt, 0),
+      grafik_kiritilmagan_mijozlar: clients.filter((c) => !c.hasSchedule && c.remaining > 0).length,
+      tolov_toxtagan_grafiksiz: clients.filter((c) => c.stale).slice(0, 40).map((c) => ({
+        fio: c.fullName, xonadon: c.apartmentId, shartnoma: c.contractNumber, qoldiq: c.remaining,
+        oxirgi_tolov: c.lastPaymentDate, otgan_kun: c.daysSinceLastPayment,
+      })),
       qarzdorlar: debtors.slice(0, 40).map((c) => ({
         fio: c.fullName,
         xonadon: c.apartmentId,

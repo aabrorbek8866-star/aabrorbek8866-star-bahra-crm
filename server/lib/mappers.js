@@ -46,6 +46,8 @@ export const toApartment = (r) => ({
   floor: r.floor,
   area: r.area,
   rooms: r.rooms,
+  totalArea: r.total_area,
+  livingArea: r.living_area,
   status: r.status,
   clientId: r.client_id ?? null,
 });

@@ -56,6 +56,24 @@ export function CrmProvider({ children }) {
     },
     replaceClient: (client) =>
       setState((s) => ({ ...s, clients: s.clients.map((c) => (c.id === client.id ? client : c)) })),
+    createClient: async (data) => {
+      const client = await api("/clients", { method: "POST", body: data });
+      await reload();
+      return client;
+    },
+    updateClient: async (id, patch) => {
+      const client = await api(`/clients/${id}`, { method: "PATCH", body: patch });
+      setState((s) => ({ ...s, clients: s.clients.map((c) => (c.id === id ? client : c)) }));
+    },
+    deleteClient: async (id) => {
+      await api(`/clients/${id}`, { method: "DELETE" });
+      await reload();
+    },
+    importClientPayments: async (id, body) => {
+      const result = await api(`/clients/${id}/payments/import`, { method: "POST", body });
+      await reload();
+      return result;
+    },
     importData: async (payload) => {
       const result = await api("/import", { method: "POST", body: payload });
       await reload();

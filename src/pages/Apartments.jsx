@@ -5,22 +5,25 @@ import { useCrm } from "../store/CrmContext";
 import { useAuth } from "../store/AuthContext";
 import { BUILDING } from "../data/schema";
 import { PageHeader, Modal } from "../components/ui";
+import ClientForm from "../components/clients/ClientForm";
 import { api } from "../services/api";
 import { fmtShort } from "../utils/format";
 
 // "Shaxmatka" ko'rinishi: har podyezd uchun 7 qavat × 4 xonadon
 export default function Apartments() {
-  const { apartments, clientById, reload } = useCrm();
+  const { apartments, clientById, reload, createClient } = useCrm();
   const { can } = useAuth();
   const navigate = useNavigate();
   const [editMode, setEditMode] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [selling, setSelling] = useState(null);
   const sold = apartments.filter((a) => a.status === "sold").length;
   const missing = apartments.filter((a) => !a.area).length;
 
   const onTile = (a, c) => {
     if (editMode) setEditing(a);
     else if (c) navigate(`/mijozlar/${c.id}`);
+    else if (can("clients:edit")) setSelling(a);
   };
 
   return (
@@ -43,7 +46,7 @@ export default function Apartments() {
       <div className="mb-4 flex flex-wrap gap-4 text-xs text-slate-600">
         <Legend cls="bg-emerald-500" label="Sotilgan, to'lov o'z vaqtida" />
         <Legend cls="bg-red-500" label="Sotilgan, qarzdor" />
-        <Legend cls="bg-white border border-slate-300" label="Bo'sh" />
+        <Legend cls="bg-white border border-slate-300" label={can("clients:edit") ? "Bo'sh — bosing va mijoz qo'shing" : "Bo'sh"} />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         {Array.from({ length: BUILDING.entrances }, (_, e) => e + 1).map((entrance) => (
@@ -67,7 +70,7 @@ export default function Apartments() {
                         return (
                           <button
                             key={a.id}
-                            disabled={!c && !editMode}
+                            disabled={!c && !editMode && !can("clients:edit")}
                             onClick={() => onTile(a, c)}
                             title={c ? `${c.fullName}\nTo'langan: ${c.progress.toFixed(0)}%` : "Bo'sh xonadon"}
                             className={`rounded-lg px-2 py-2 text-left transition disabled:cursor-default ${cls} ${editMode ? "ring-2 ring-brand-300 ring-offset-1" : ""}`}
@@ -92,14 +95,31 @@ export default function Apartments() {
       <Modal open={!!editing} onClose={() => setEditing(null)} title={editing ? `№${editing.id} xonadon — ${editing.entrance}-podyezd, ${editing.floor}-qavat` : ""}>
         {editing && <ApartmentForm apartment={editing} onDone={async () => { await reload(); setEditing(null); }} />}
       </Modal>
+
+      <Modal open={!!selling} onClose={() => setSelling(null)} title={selling ? `№${selling.id} xonadon — yangi mijoz (sotuv)` : ""} wide>
+        {selling && (
+          <ClientForm
+            onCancel={() => setSelling(null)}
+            onSubmit={async (data) => {
+              const client = await createClient({ ...data, apartmentId: selling.id });
+              setSelling(null);
+              navigate(`/mijozlar/${client.id}`);
+            }}
+          />
+        )}
+      </Modal>
     </>
   );
 }
+
+const num = (v) => Number(String(v ?? "").replace(",", ".")) || 0;
 
 function ApartmentForm({ apartment, onDone }) {
   const [form, setForm] = useState({
     rooms: apartment.rooms ? String(apartment.rooms) : "",
     area: apartment.area ? String(apartment.area) : "",
+    totalArea: apartment.totalArea ? String(apartment.totalArea) : "",
+    livingArea: apartment.livingArea ? String(apartment.livingArea) : "",
     scope: "entrance",
   });
   const [error, setError] = useState("");
@@ -113,7 +133,13 @@ function ApartmentForm({ apartment, onDone }) {
     try {
       await api(`/apartments/${apartment.id}`, {
         method: "PATCH",
-        body: { rooms: Number(form.rooms), area: Number(form.area.replace(",", ".")), scope: form.scope },
+        body: {
+          rooms: Number(form.rooms),
+          area: num(form.area),
+          totalArea: num(form.totalArea),
+          livingArea: num(form.livingArea),
+          scope: form.scope,
+        },
       });
       await onDone();
     } catch (err) {
@@ -138,6 +164,14 @@ function ApartmentForm({ apartment, onDone }) {
         <div>
           <label className="label" htmlFor="apt-area">Maydon (m²)</label>
           <input id="apt-area" inputMode="decimal" className="input" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="77.8" />
+        </div>
+        <div>
+          <label className="label" htmlFor="apt-total">Umumiy maydoni</label>
+          <input id="apt-total" inputMode="decimal" className="input" value={form.totalArea} onChange={(e) => setForm({ ...form, totalArea: e.target.value })} placeholder="69.17" />
+        </div>
+        <div>
+          <label className="label" htmlFor="apt-living">Yashash maydoni</label>
+          <input id="apt-living" inputMode="decimal" className="input" value={form.livingArea} onChange={(e) => setForm({ ...form, livingArea: e.target.value })} placeholder="37.97" />
         </div>
       </div>
       <fieldset>

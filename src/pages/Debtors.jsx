@@ -15,7 +15,9 @@ const DEFAULT_TEMPLATE =
   `Hurmatli {fio}! ${COMPANY.brand}: {xonadon}-xonadon bo'yicha {qarz} so'm muddati o'tgan qarzdorlik mavjud ({kun} kun). Iltimos, 5 kun ichida to'lovni amalga oshiring. Tel: ${COMPANY.phone}`;
 
 export default function Debtors() {
-  const { debtors, smsLog, reload } = useCrm();
+  const { debtors, clients, smsLog, reload } = useCrm();
+  const stale = useMemo(() => clients.filter((c) => c.stale).sort((a, b) => b.daysSinceLastPayment - a.daysSinceLastPayment), [clients]);
+  const noSchedule = clients.filter((c) => !c.hasSchedule && c.remaining > 0).length;
   const { can } = useAuth();
   const { open } = useAgents();
   const [selected, setSelected] = useState(new Set());
@@ -71,6 +73,14 @@ export default function Debtors() {
         }
       />
 
+      {noSchedule > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <b>{noSchedule} ta mijozda to'lov grafigi (boshlang'ich va oylik to'lov) kiritilmagan</b> — ular uchun muddati o'tgan qarzni hisoblab
+          bo'lmaydi, shuning uchun qizil ro'yxatga tushmaydi. Mijoz kabinetida <b>Tahrirlash</b> orqali grafikni kiriting.
+          Hozircha ular oxirgi to'lov sanasi bo'yicha pastdagi sariq ro'yxatda kuzatiladi.
+        </div>
+      )}
+
       <div className="card overflow-hidden border-red-200">
         {debtors.length === 0 ? (
           <EmptyState icon={ShieldCheck} title="Qarzdorlar yo'q" text="Barcha mijozlar to'lovlarni o'z vaqtida amalga oshirmoqda." />
@@ -118,6 +128,34 @@ export default function Debtors() {
           </div>
         )}
       </div>
+
+      {stale.length > 0 && (
+        <div className="card mt-6 overflow-hidden border-amber-200">
+          <div className="border-b border-amber-100 bg-amber-50 px-5 py-3">
+            <h2 className="font-semibold text-amber-900">To'lov to'xtagan mijozlar ({stale.length})</h2>
+            <p className="text-xs text-amber-800">Grafik kiritilmagan, oxirgi to'lovdan beri 30 kundan ko'p o'tgan va shartnoma to'liq yopilmagan</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50">
+                <tr><th className="th">Mijoz</th><th className="th">Xonadon</th><th className="th">Oxirgi to'lov</th><th className="th">O'tgan</th><th className="th text-right">Qoldiq</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {stale.map((c) => (
+                  <tr key={c.id} className="hover:bg-amber-50/60">
+                    <td className="td"><Link to={`/mijozlar/${c.id}`} className="font-medium text-amber-800 hover:underline">{c.fullName}</Link>
+                      <div className="text-xs text-slate-500">{c.phone || "telefon yo'q"} · {c.contractNumber}</div></td>
+                    <td className="td">№{c.apartmentId}</td>
+                    <td className="td whitespace-nowrap">{fmtDate(c.lastPaymentDate)}</td>
+                    <td className="td"><Badge className="bg-amber-100 text-amber-800">{c.daysSinceLastPayment} kun</Badge></td>
+                    <td className="td whitespace-nowrap text-right font-semibold">{fmtMoney(c.remaining)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <Modal open={smsOpen} onClose={() => setSmsOpen(false)} title={`SMS xabarnoma — ${targets.length} ta mijoz`} wide>
         {result ? (

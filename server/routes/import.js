@@ -21,12 +21,9 @@ router.post("/", requirePerm("import"), ah(async (req, res) => {
   const errors = [];
 
   for (const a of apartments) if (!(a.id >= 1 && a.id <= BUILDING.total)) errors.push(`Xonadon raqami noto'g'ri: ${a.id}`);
-  const seenContracts = new Set();
   for (const c of clients) {
     if (!String(c.fullName ?? "").trim()) errors.push(`${c.apartmentId}-xonadon: F.I.O yo'q`);
     if (!isDate(c.contractDate)) errors.push(`${c.apartmentId}-xonadon: shartnoma sanasi noto'g'ri`);
-    if (seenContracts.has(c.contractNumber)) errors.push(`Shartnoma raqami takrorlangan: ${c.contractNumber}`);
-    seenContracts.add(c.contractNumber);
   }
   for (const p of payments) {
     if (!isDate(p.date) || !(int(p.amount) > 0) || !TYPES.includes(p.type)) errors.push(`To'lov xato: ${p.apartmentId}-xonadon, ${p.date}`);
@@ -42,13 +39,21 @@ router.post("/", requirePerm("import"), ah(async (req, res) => {
     }
 
     for (const a of apartments) {
+      // Excelda bo'sh qoldirilgan maydon/xonalar saytda kiritilgan qiymatni o'chirmaydi
       await db.query(
-        `UPDATE apartments SET area = $2, rooms = $3, status = $4 WHERE id = $1`,
-        [a.id, Number(a.area) || 0, int(a.rooms), a.status === "sold" ? "sold" : "free"],
+        `UPDATE apartments SET
+           area        = CASE WHEN $2::numeric > 0 THEN $2::numeric ELSE area END,
+           rooms       = CASE WHEN $3::int > 0 THEN $3::int ELSE rooms END,
+           total_area  = CASE WHEN $4::numeric > 0 THEN $4::numeric ELSE total_area END,
+           living_area = CASE WHEN $5::numeric > 0 THEN $5::numeric ELSE living_area END,
+           status = $6
+         WHERE id = $1`,
+        [a.id, Number(a.area) || 0, int(a.rooms), Number(a.totalArea) || 0, Number(a.livingArea) || 0, a.status === "sold" ? "sold" : "free"],
       );
     }
 
-    // Exceldagi mijozlar: xonadon raqami bo'yicha yangilash yoki qo'shish (PDF saqlanib qoladi)
+    // Exceldagi mijozlar: xonadon raqami bo'yicha yangilash yoki qo'shish.
+    // Excelda bo'sh qolgan katak (telefon, grafik, ...) saytda kiritilgan qiymatni o'chirmaydi; PDF ham saqlanadi.
     const idByApartment = new Map();
     for (const c of clients) {
       const { rows } = await db.query(
@@ -56,16 +61,23 @@ router.post("/", requirePerm("import"), ah(async (req, res) => {
                               total_price, down_payment, monthly_payment, installment_months)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT (apartment_id) DO UPDATE SET
-           full_name = EXCLUDED.full_name, passport = EXCLUDED.passport, phone = EXCLUDED.phone,
-           contract_number = EXCLUDED.contract_number, contract_date = EXCLUDED.contract_date,
-           last_payment_date = COALESCE(EXCLUDED.last_payment_date, clients.last_payment_date),
-           total_price = EXCLUDED.total_price, down_payment = EXCLUDED.down_payment,
-           monthly_payment = EXCLUDED.monthly_payment, installment_months = EXCLUDED.installment_months,
+           full_name          = CASE WHEN $12 THEN clients.full_name ELSE EXCLUDED.full_name END,
+           passport           = COALESCE(NULLIF(EXCLUDED.passport, ''), clients.passport),
+           phone              = COALESCE(NULLIF(EXCLUDED.phone, ''), clients.phone),
+           contract_number    = EXCLUDED.contract_number,
+           contract_date      = EXCLUDED.contract_date,
+           last_payment_date  = COALESCE(EXCLUDED.last_payment_date, clients.last_payment_date),
+           total_price        = COALESCE(NULLIF(EXCLUDED.total_price, 0), clients.total_price),
+           down_payment       = COALESCE(NULLIF(EXCLUDED.down_payment, 0), clients.down_payment),
+           monthly_payment    = COALESCE(NULLIF(EXCLUDED.monthly_payment, 0), clients.monthly_payment),
+           installment_months = COALESCE(NULLIF(EXCLUDED.installment_months, 0), clients.installment_months),
            updated_at = now()
          RETURNING id`,
         [c.apartmentId, c.fullName.trim(), c.passport ?? "", c.phone ?? "", String(c.contractNumber).trim(), c.contractDate,
           isDate(c.lastPaymentDate) ? c.lastPaymentDate : null, int(c.totalPrice), int(c.downPayment),
-          int(c.monthlyPayment), int(c.installmentMonths) || 24],
+          int(c.monthlyPayment), int(c.installmentMonths),
+          // Excelda ism yo'q bo'lsa ("Ism kiritilmagan ...") — saytda kiritilgan ism saqlanadi
+          c.fullName.startsWith("Ism kiritilmagan")],
       );
       idByApartment.set(c.apartmentId, rows[0].id);
       await db.query("UPDATE apartments SET status = 'sold' WHERE id = $1", [c.apartmentId]);

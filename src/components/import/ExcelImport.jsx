@@ -45,6 +45,11 @@ export default function ExcelImport({ onConfirm }) {
   };
 
   const canImport = parsed && parsed.errors.length === 0 && parsed.apartments.length > 0;
+  const paidByApt = new Map();
+  for (const p of parsed?.payments ?? []) {
+    const e = paidByApt.get(p.apartmentId) ?? { n: 0, sum: 0 };
+    paidByApt.set(p.apartmentId, { n: e.n + 1, sum: e.sum + p.amount });
+  }
 
   return (
     <div className="space-y-4">
@@ -56,9 +61,9 @@ export default function ExcelImport({ onConfirm }) {
       >
         {busy ? <Loader2 className="animate-spin text-brand-600" size={36} /> : <UploadCloud className="text-brand-600" size={36} />}
         <p className="mt-3 font-medium text-slate-800">Excel faylni shu yerga tashlang yoki tanlash uchun bosing</p>
-        <p className="mt-1 text-sm text-slate-500">.xlsx, .xls yoki .csv · "Mijozlar" varag'i (56 xonadon) + ixtiyoriy "To'lovlar" varag'i</p>
+        <p className="mt-1 text-sm text-slate-500">.xlsx · "umumiy" varag'i (56 xonadon) + "1-xonadon" … "56-xonadon" to'lov varaqlari</p>
         {fileName && <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-slate-700"><FileSpreadsheet size={16} />{fileName}</p>}
-        <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" hidden onChange={(e) => handle(e.target.files[0])} />
+        <input ref={inputRef} type="file" accept=".xlsx,.xls" hidden onChange={(e) => handle(e.target.files[0])} />
       </div>
 
       {parsed && (
@@ -79,17 +84,19 @@ export default function ExcelImport({ onConfirm }) {
 
           {parsed.clients.length > 0 && (
             <div className="card overflow-hidden">
-              <p className="px-4 pt-4 text-sm font-semibold text-slate-800">Oldindan ko'rish (dastlabki 10 ta mijoz)</p>
-              <div className="overflow-x-auto">
+              <p className="px-4 pt-4 text-sm font-semibold text-slate-800">Oldindan ko'rish ({parsed.clients.length} ta mijoz)</p>
+              <div className="max-h-96 overflow-auto">
                 <table className="mt-2 w-full">
                   <thead className="bg-slate-50">
-                    <tr><th className="th">№</th><th className="th">F.I.O</th><th className="th">Telefon</th><th className="th">Shartnoma</th><th className="th">Sana</th><th className="th text-right">Narx</th></tr>
+                    <tr><th className="th">№</th><th className="th">F.I.O</th><th className="th">Maydon</th><th className="th">Shartnoma</th><th className="th">Sana</th><th className="th text-right">Summa</th><th className="th text-right">To'lovlar</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {parsed.clients.slice(0, 10).map((c) => (
+                    {parsed.clients.map((c) => (
                       <tr key={c.apartmentId}>
-                        <td className="td">{c.apartmentId}</td><td className="td font-medium">{c.fullName}</td><td className="td">{c.phone}</td>
+                        <td className="td">{c.apartmentId}</td><td className="td font-medium">{c.fullName}</td>
+                        <td className="td">{parsed.apartments[c.apartmentId - 1]?.area || "—"} m²</td>
                         <td className="td">{c.contractNumber}</td><td className="td">{fmtDate(c.contractDate)}</td><td className="td text-right">{fmtMoney(c.totalPrice)}</td>
+                        <td className="td text-right">{paidByApt.get(c.apartmentId)?.n ?? 0} ta · {fmtMoney(paidByApt.get(c.apartmentId)?.sum ?? 0)}</td>
                       </tr>
                     ))}
                   </tbody>

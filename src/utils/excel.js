@@ -1,33 +1,17 @@
 import * as XLSX from "xlsx";
 import { BUILDING, locateApartment } from "../../shared/building.js";
+import { COMPANY } from "../../shared/company.js";
 
-// Excel ustun nomlarini moslashuvchan aniqlash: bir nechta yozilish variantlari qabul qilinadi.
-const CLIENT_COLUMNS = {
-  apartmentId:       ["xonadon", "xonadon raqami", "xonadon №", "kv", "kvartira", "№"],
-  entrance:          ["podyezd", "podezd", "pod'ezd"],
-  floor:             ["qavat", "etaj"],
-  area:              ["maydon", "kvadrat", "kv.m", "m2", "m²", "maydoni"],
-  rooms:             ["xonalar", "xonalar soni", "xona"],
-  status:            ["holati", "holat", "status"],
-  fullName:          ["fio", "f.i.o", "f.i.sh", "mijoz", "ism familiya"],
-  passport:          ["pasport", "passport", "pasport malumotlari"],
-  phone:             ["telefon", "tel", "telefon raqami"],
-  contractNumber:    ["shartnoma raqami", "shartnoma №", "shartnoma"],
-  contractDate:      ["shartnoma sanasi", "sana"],
-  totalPrice:        ["umumiy narx", "narxi", "shartnoma summasi", "umumiy summa"],
-  downPayment:       ["boshlangich tolov", "boshlang'ich to'lov", "oldindan tolov"],
-  monthlyPayment:    ["oylik tolov", "oylik to'lov", "har oylik tolov"],
-  installmentMonths: ["muddat", "muddat (oy)", "oylar soni", "bolib tolash muddati"],
-  lastPaymentDate:   ["oxirgi tolov sanasi", "oxirgi to'lov sanasi", "oxirgi tolov"],
-};
+/*
+ * Excel formati — kompaniyaning "C-blok" fayli asosida:
+ *   "umumiy" varag'i  — 56 xonadon: Etaj, Podez, Xonadon raqami, Maydoni, Umumiy/Yashash maydoni,
+ *                       Shartnoma raqami/sanasi/summasi, Ism Familya (+ ixtiyoriy qo'shimcha ustunlar)
+ *   "N-xonadon" varaqlari — har xonadonning to'lovlari: Sana | Officega to'lov | Terminal Humo |
+ *                       Terminal uzcard | Bank | Shartnoma summasi | Izoh
+ * Bitta mijozning to'lov jadvali (to'lov grafigi) ham xuddi shu "N-xonadon" ko'rinishida.
+ */
 
-const PAYMENT_COLUMNS = {
-  ref:     ["shartnoma raqami", "xonadon", "xonadon raqami", "mijoz id"],
-  date:    ["sana", "tolov sanasi", "to'lov sanasi"],
-  type:    ["turi", "tolov turi", "to'lov turi"],
-  amount:  ["summa", "tolov summasi", "to'lov summasi"],
-  comment: ["izoh", "comment", "izohlar"],
-};
+// ---------- Umumiy yordamchilar ----------
 
 const norm = (s) =>
   String(s ?? "")
@@ -36,266 +20,389 @@ const norm = (s) =>
     .replace(/[_\s]+/g, " ")
     .trim();
 
-function mapHeaders(headerRow, spec) {
-  const result = {};
-  headerRow.forEach((h, idx) => {
-    const n = norm(h);
-    for (const [field, aliases] of Object.entries(spec)) {
-      if (result[field] === undefined && aliases.some((a) => norm(a) === n)) result[field] = idx;
-    }
-  });
-  // Ikkinchi o'tish: qisman moslik ("Shartnoma raqami (№)" kabi)
-  headerRow.forEach((h, idx) => {
-    const n = norm(h);
-    for (const [field, aliases] of Object.entries(spec)) {
-      if (result[field] === undefined && aliases.some((a) => n.startsWith(norm(a)))) result[field] = idx;
-    }
-  });
-  return result;
-}
-
-const toNumber = (v) => {
-  if (typeof v === "number") return v;
-  const n = Number(String(v ?? "").replace(/[^\d.,-]/g, "").replace(/,/g, "."));
-  return Number.isFinite(n) ? n : 0;
+/** "77,8 м2" → 77.8 · "233 400 000" → 233400000 · 165000000 → 165000000 */
+export const toNumber = (v) => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v ?? "").replace(/(\d)[\s ]+(?=\d{3}\b)/g, "$1");
+  const m = s.match(/-?\d+(?:[.,]\d+)?/);
+  return m ? Number(m[0].replace(",", ".")) : 0;
 };
 
-/** Excel sana (seriya raqam), Date, "dd.mm.yyyy" yoki "yyyy-mm-dd" → "yyyy-mm-dd" */
+const pad = (n) => String(n).padStart(2, "0");
+
+/**
+ * Har xil yozilgan sanalarni "yyyy-mm-dd" ga aylantirish:
+ * Excel sana (seriya raqam), "29.08.2020", "26.10. 2020", "02.06 2023", "06,08,2026", "2020-08-29".
+ */
 export const toIsoDate = (v) => {
   if (v === null || v === undefined || v === "") return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "number") {
     const d = XLSX.SSF.parse_date_code(v);
-    return d ? `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}` : null;
+    return d && d.y > 1990 ? `${d.y}-${pad(d.m)}-${pad(d.d)}` : null;
   }
   const s = String(v).trim();
-  let m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
-  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  let m = s.match(/^(\d{1,2})\s*[.,/-]\s*(\d{1,2})\s*[.,/\-\s]\s*(\d{4})/);
+  if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return m ? `${m[1]}-${pad(m[2])}-${pad(m[3])}` : null;
 };
 
-const parseType = (v) => {
-  const s = norm(v);
-  if (s.includes("humo")) return "humo";
-  if (s.includes("uzcard") || s.includes("uzkard")) return "uzcard";
-  if (s.includes("bank") || s.includes("otkazma")) return "bank";
-  if (s.includes("naqd") || s.includes("kassa") || s.includes("office") || s.includes("ofis")) return "cash";
-  return null;
-};
+const fmtDmy = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : "");
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const sheetRows = (ws) => XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
 
-/** Sarlavha qatorini topish (birinchi 10 qatordan eng ko'p moslik bergani). */
-function findHeader(rows, spec) {
-  let best = { idx: 0, map: {}, score: 0 };
-  rows.slice(0, 10).forEach((row, idx) => {
+/** Sarlavha qatoridagi ustunlarni aniqlash: avval to'liq moslik, keyin boshlanishi bo'yicha. */
+function mapHeaders(headerRow, spec) {
+  const result = {};
+  const used = new Set();
+  const pass = (match) =>
+    headerRow.forEach((h, idx) => {
+      const n = norm(h);
+      if (!n || used.has(idx)) return;
+      for (const [field, aliases] of Object.entries(spec)) {
+        if (result[field] === undefined && aliases.some((a) => match(n, norm(a)))) {
+          result[field] = idx;
+          used.add(idx);
+          return;
+        }
+      }
+    });
+  pass((n, a) => n === a);
+  pass((n, a) => n.startsWith(a));
+  return result;
+}
+
+function findHeader(rows, spec, required) {
+  let best = { idx: -1, map: {}, score: 0 };
+  rows.slice(0, 12).forEach((row, idx) => {
     const map = mapHeaders(row, spec);
     const score = Object.keys(map).length;
-    if (score > best.score) best = { idx, map, score };
+    if (required.every((f) => map[f] !== undefined) && score > best.score) best = { idx, map, score };
   });
   return best;
 }
 
+// ---------- "umumiy" varag'i ----------
+
+const MAIN_COLUMNS = {
+  apartmentId:       ["xonadon raqami", "xonadon raqami tartib boyicha", "xonadon", "xonadon №", "kvartira", "№"],
+  floor:             ["etaj", "qavat"],
+  entrance:          ["podez", "podyezd", "podezd"],
+  totalArea:         ["umumiy maydoni", "umumiy maydon"],
+  livingArea:        ["yashash maydoni", "yashash maydon"],
+  area:              ["maydoni (м.2)", "maydoni (m.2)", "maydoni", "maydon", "maydon (m²)", "maydon (m2)"],
+  rooms:             ["xonalar soni", "xonalar", "xona"],
+  status:            ["holati", "holat", "status"],
+  contractNumber:    ["shartnoma raqami", "shartnoma №"],
+  contractDate:      ["shartnoma sanasi"],
+  totalPrice:        ["shartnoma summasi", "sahrtnoma summasi", "umumiy narx", "narxi", "umumiy summa"],
+  fullName:          ["ism familya", "ism familiya", "f.i.o", "fio", "f.i.sh", "mijoz"],
+  phone:             ["telefon", "telefon raqami", "tel"],
+  passport:          ["pasport", "passport"],
+  downPayment:       ["boshlangich tolov", "oldindan tolov"],
+  monthlyPayment:    ["oylik tolov", "har oylik tolov"],
+  installmentMonths: ["muddat (oy)", "muddat", "oylar soni"],
+};
+
+// ---------- To'lovlar jadvali ("N-xonadon" / to'lov grafigi) ----------
+
+const GRID_COLUMNS = {
+  date:   ["sana", "tolov sanasi"],
+  cash:   ["officega tolov", "ofisga tolov", "office", "ofis", "naqd", "kassa"],
+  humo:   ["terminal humo", "humo"],
+  uzcard: ["terminal uzcard", "uzcard", "uzkard"],
+  bank:   ["bank", "bank otkazmasi", "bank orqali"],
+  total:  ["shartnoma summasi", "sahrtnoma summasi"],
+  comment: ["izoh", "izohlar", "comment"],
+};
+
+const GRID_TYPES = [
+  ["cash", "Officega to'lov"],
+  ["humo", "Terminal Humo"],
+  ["uzcard", "Terminal uzcard"],
+  ["bank", "Bank"],
+];
+
 /**
- * Excel faylni o'qib, xonadon/mijoz/to'lov ob'ektlariga aylantiradi.
- * 1-varaq (yoki "Mijozlar"): har bir qator — bitta xonadon (56 ta).
- * Ixtiyoriy "To'lovlar" varag'i: to'lov tarixi.
+ * Bitta to'lovlar jadvalini o'qish.
+ * Bir qatorda bir nechta ustun to'ldirilgan bo'lsa (masalan, ofis + uzcard), har biri alohida to'lov bo'ladi.
+ * @returns {{ title, totalPrice, payments: {date,type,amount,comment}[], warnings: string[] } | null}
+ */
+export function parsePaymentGrid(ws, label = "") {
+  const rows = sheetRows(ws);
+  const { idx, map } = findHeader(rows, GRID_COLUMNS, ["date"]);
+  if (idx < 0 || !GRID_TYPES.some(([t]) => map[t] !== undefined)) return null;
+
+  const title = rows
+    .slice(0, idx)
+    .flat()
+    .map((v) => String(v).trim())
+    .find((v) => v && Number.isNaN(Number(v)));
+  const payments = [];
+  const warnings = [];
+  let totalPrice = 0;
+  const today = todayIso();
+
+  // "jami:" qatori va undan oldingi =SUM(...) qatori to'lov emas
+  const body = rows.slice(idx + 1);
+  const jamiAt = body.findIndex((row) => row.some((v) => /^(jami|qarzdorligi)/.test(norm(v))));
+
+  body.forEach((row, i) => {
+    const line = idx + i + 2;
+    if (!totalPrice && map.total !== undefined) totalPrice = toNumber(row[map.total]);
+    const hasAmount = GRID_TYPES.some(([t]) => map[t] !== undefined && toNumber(row[map[t]]) > 0);
+    if (!hasAmount) return; // bo'sh qator
+    if (jamiAt >= 0 && i >= jamiAt - 1 && String(row[map.date]).trim() === "") return; // jami (SUM) qatori
+    const date = toIsoDate(row[map.date]);
+    if (!date) return void warnings.push(`${label}${line}-qator: sana noto'g'ri ("${row[map.date]}") — o'tkazib yuborildi`);
+    if (date > today) return void warnings.push(`${label}${line}-qator: sana kelajakda (${fmtDmy(date)}) — o'tkazib yuborildi`);
+    const comment = map.comment !== undefined ? String(row[map.comment]).trim() : "";
+    for (const [type, colLabel] of GRID_TYPES) {
+      if (map[type] === undefined) continue;
+      const amount = Math.round(toNumber(row[map[type]]));
+      if (amount > 0) payments.push({ date, type, amount, comment: comment || `${colLabel} (Excel'dan)` });
+    }
+  });
+  return { title, totalPrice, payments, warnings };
+}
+
+/** Mijoz kabinetidan yuklanadigan bitta to'lov jadvali fayli. */
+export async function parsePaymentScheduleFile(file) {
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  for (const name of wb.SheetNames) {
+    const grid = parsePaymentGrid(wb.Sheets[name]);
+    if (grid) return grid;
+  }
+  throw new Error("Faylda to'lovlar jadvali topilmadi: \"Sana\" va \"Officega to'lov / Terminal Humo / Terminal uzcard / Bank\" ustunlari bo'lishi kerak.");
+}
+
+// ---------- To'liq fayl importi ----------
+
+/**
+ * C-blok faylini o'qish: "umumiy" + "N-xonadon" varaqlari.
  * @returns {Promise<{ apartments, clients, payments, errors: string[], warnings: string[] }>}
  */
 export async function parseCrmWorkbook(file) {
-  const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
   const errors = [];
   const warnings = [];
+  const today = todayIso();
 
-  const clientSheetName =
-    wb.SheetNames.find((n) => norm(n).includes("mijoz")) ?? wb.SheetNames[0];
-  const paymentSheetName = wb.SheetNames.find((n) => norm(n).includes("tolov"));
-
-  const rows = sheetRows(wb.Sheets[clientSheetName]);
-  const { idx: headerIdx, map } = findHeader(rows, CLIENT_COLUMNS);
-  if (map.apartmentId === undefined) {
-    errors.push(`"${clientSheetName}" varag'ida "Xonadon raqami" ustuni topilmadi.`);
+  // Asosiy varaq: "umumiy" yoki xonadon raqami ustuni bor birinchi varaq
+  const candidates = [...wb.SheetNames].sort((a, b) => Number(norm(b).includes("umumiy")) - Number(norm(a).includes("umumiy")));
+  let mainName = null;
+  let header = null;
+  for (const name of candidates) {
+    const h = findHeader(sheetRows(wb.Sheets[name]), MAIN_COLUMNS, ["apartmentId"]);
+    if (h.idx >= 0) { mainName = name; header = h; break; }
+  }
+  if (!mainName) {
+    errors.push(`Asosiy varaq topilmadi: "Xonadon raqami" ustuni bo'lgan varaq ("umumiy") kerak.`);
     return { apartments: [], clients: [], payments: [], errors, warnings };
   }
 
+  const rows = sheetRows(wb.Sheets[mainName]);
+  const { idx: headerIdx, map } = header;
   const get = (row, f) => (map[f] === undefined ? "" : row[map[f]]);
   const apartments = new Map();
   const clients = [];
+  const contractCount = new Map();
 
   rows.slice(headerIdx + 1).forEach((row, i) => {
     const line = headerIdx + i + 2;
     const num = Math.round(toNumber(get(row, "apartmentId")));
-    if (!num) return; // bo'sh qator
-    if (num < 1 || num > BUILDING.total) {
-      errors.push(`${line}-qator: xonadon raqami ${num} — 1..${BUILDING.total} oralig'ida bo'lishi kerak.`);
-      return;
-    }
+    if (!num) return;
+    if (num < 1 || num > BUILDING.total) return void errors.push(`${line}-qator: xonadon raqami ${num} — 1..${BUILDING.total} oralig'ida bo'lishi kerak.`);
     if (apartments.has(num)) warnings.push(`${line}-qator: ${num}-xonadon takrorlangan, oxirgisi olindi.`);
 
     const loc = locateApartment(num);
-    const fullName = String(get(row, "fullName")).trim();
-    const statusRaw = norm(get(row, "status"));
-    const sold = fullName ? true : statusRaw.includes("sotil");
+    const nameRaw = String(get(row, "fullName")).trim();
+    const unsold = norm(nameRaw).startsWith("sotilma") || norm(get(row, "status")).startsWith("bosh");
+    const contractNumber = String(get(row, "contractNumber")).trim();
+    const totalPrice = Math.round(toNumber(get(row, "totalPrice")));
+    const sold = !unsold && Boolean(nameRaw || contractNumber || totalPrice);
 
     const apt = {
       id: num,
-      entrance: Math.round(toNumber(get(row, "entrance"))) || loc.entrance,
-      floor: Math.round(toNumber(get(row, "floor"))) || loc.floor,
+      entrance: loc.entrance,
+      floor: loc.floor,
       area: toNumber(get(row, "area")),
+      totalArea: toNumber(get(row, "totalArea")),
+      livingArea: toNumber(get(row, "livingArea")),
       rooms: Math.round(toNumber(get(row, "rooms"))),
       status: sold ? "sold" : "free",
-      clientId: null,
     };
-
-    if (sold && fullName) {
-      const contractDate = toIsoDate(get(row, "contractDate"));
-      const totalPrice = toNumber(get(row, "totalPrice"));
-      const downPayment = toNumber(get(row, "downPayment"));
-      const installmentMonths = Math.round(toNumber(get(row, "installmentMonths"))) || 24;
-      const monthlyPayment =
-        toNumber(get(row, "monthlyPayment")) ||
-        Math.round(Math.max(0, totalPrice - downPayment) / installmentMonths);
-
-      if (!contractDate) warnings.push(`${line}-qator (${fullName}): shartnoma sanasi yo'q — bugungi sana qo'yildi.`);
-      if (!totalPrice) warnings.push(`${line}-qator (${fullName}): umumiy narx ko'rsatilmagan — qarzdorlik hisoblanmaydi.`);
-
-      const client = {
-        id: num, // vaqtinchalik — bazada haqiqiy id beriladi
-        fullName,
-        passport: String(get(row, "passport")).trim(),
-        phone: String(get(row, "phone")).trim(),
-        contractNumber: String(get(row, "contractNumber")).trim() || `BB-${num}`,
-        contractDate: contractDate ?? new Date().toISOString().slice(0, 10),
-        lastPaymentDate: toIsoDate(get(row, "lastPaymentDate")),
-        contractPdfUrl: null,
-        contractPdfName: null,
-        apartmentId: num,
-        totalPrice,
-        downPayment,
-        monthlyPayment,
-        installmentMonths,
-      };
-      apt.clientId = client.id;
-      clients.push(client);
-    }
     apartments.set(num, apt);
-  });
+    if (!sold) return;
 
-  // Excelda yo'q xonadonlarni "Bo'sh" sifatida to'ldirish — har doim 56 ta bo'ladi
-  for (let n = 1; n <= BUILDING.total; n++) {
-    if (!apartments.has(n)) {
-      apartments.set(n, { id: n, ...locateApartment(n), area: 0, rooms: 0, status: "free", clientId: null });
+    let contractDate = toIsoDate(get(row, "contractDate"));
+    if (!contractDate) {
+      warnings.push(`№${num}: shartnoma sanasi yo'q yoki noto'g'ri ("${get(row, "contractDate")}") — bugungi sana qo'yildi, kabinetda tuzating.`);
+      contractDate = today;
+    } else if (contractDate > today) {
+      warnings.push(`№${num}: shartnoma sanasi kelajakda — ${fmtDmy(contractDate)}. Xato bo'lsa, kabinetda tuzating.`);
     }
-  }
-  if (apartments.size > 0 && rows.length - headerIdx - 1 < BUILDING.total) {
-    warnings.push(`Excelda ${BUILDING.total} tadan kam xonadon bor — yetishmaganlari "Bo'sh" deb qo'shildi.`);
-  }
+    const fullName = nameRaw || `Ism kiritilmagan (№${num})`;
+    if (!nameRaw) warnings.push(`№${num}: mijoz ismi yozilmagan — "${fullName}" deb saqlanadi, kabinetda tuzating.`);
+    if (!totalPrice) warnings.push(`№${num}: shartnoma summasi yo'q.`);
+    const cn = contractNumber || `№${num}`;
+    contractCount.set(cn, [...(contractCount.get(cn) ?? []), num]);
 
-  const payments = paymentSheetName
-    ? parsePaymentsSheet(wb.Sheets[paymentSheetName], clients, errors, warnings)
-    : [];
-
-  return {
-    apartments: [...apartments.values()].sort((a, b) => a.id - b.id),
-    clients,
-    payments,
-    errors,
-    warnings,
-  };
-}
-
-function parsePaymentsSheet(ws, clients, errors, warnings) {
-  const rows = sheetRows(ws);
-  const { idx: headerIdx, map } = findHeader(rows, PAYMENT_COLUMNS);
-  if (map.ref === undefined || map.amount === undefined) {
-    warnings.push(`"To'lovlar" varag'ida "Shartnoma raqami/Xonadon" yoki "Summa" ustuni topilmadi — to'lovlar o'tkazib yuborildi.`);
-    return [];
-  }
-  const byContract = new Map(clients.map((c) => [norm(c.contractNumber), c]));
-  const byApartment = new Map(clients.map((c) => [String(c.apartmentId), c]));
-  const payments = [];
-
-  rows.slice(headerIdx + 1).forEach((row, i) => {
-    const line = headerIdx + i + 2;
-    const ref = row[map.ref];
-    if (ref === "" || ref === undefined) return;
-    const client = byContract.get(norm(ref)) ?? byApartment.get(String(Math.round(toNumber(ref))));
-    const amount = toNumber(row[map.amount]);
-    const date = toIsoDate(row[map.date]);
-    const type = parseType(row[map.type]);
-
-    if (!client) return void errors.push(`To'lovlar, ${line}-qator: "${ref}" bo'yicha mijoz topilmadi.`);
-    if (!amount || !date) return void errors.push(`To'lovlar, ${line}-qator: sana yoki summa noto'g'ri.`);
-    if (!type) warnings.push(`To'lovlar, ${line}-qator: to'lov turi aniqlanmadi — "Ofis (naqd)" qo'yildi.`);
-
-    payments.push({
-      apartmentId: client.apartmentId,
-      date,
-      type: type ?? "cash",
-      amount,
-      comment: String(map.comment === undefined ? "" : row[map.comment]).trim() || "Excel'dan import qilindi",
+    clients.push({
+      id: num, // vaqtinchalik — bazada haqiqiy id beriladi
+      apartmentId: num,
+      fullName,
+      phone: String(get(row, "phone")).trim(),
+      passport: String(get(row, "passport")).trim(),
+      contractNumber: cn,
+      contractDate,
+      totalPrice,
+      downPayment: Math.round(toNumber(get(row, "downPayment"))),
+      monthlyPayment: Math.round(toNumber(get(row, "monthlyPayment"))),
+      installmentMonths: Math.round(toNumber(get(row, "installmentMonths"))),
     });
   });
-  return payments;
+
+  for (const [cn, nums] of contractCount) {
+    if (nums.length > 1) warnings.push(`Shartnoma raqami "${cn}" bir nechta xonadonda: №${nums.join(", №")}.`);
+  }
+  for (let n = 1; n <= BUILDING.total; n++) {
+    if (!apartments.has(n)) apartments.set(n, { id: n, ...locateApartment(n), area: 0, totalArea: 0, livingArea: 0, rooms: 0, status: "free" });
+  }
+
+  // To'lovlar: har bir "N-xonadon" varag'i
+  const clientByApt = new Map(clients.map((c) => [c.apartmentId, c]));
+  const payments = [];
+  for (const name of wb.SheetNames) {
+    const m = norm(name).match(/^(\d+)\s*-?\s*xonadon/);
+    if (!m) continue;
+    const num = Number(m[1]);
+    const grid = parsePaymentGrid(wb.Sheets[name], `"${name.trim()}" varag'i, `);
+    if (!grid) continue;
+    warnings.push(...grid.warnings);
+    if (!grid.payments.length) continue;
+    const client = clientByApt.get(num);
+    if (!client) {
+      warnings.push(`"${name.trim()}": ${grid.payments.length} ta to'lov bor, lekin "umumiy" da bu xonadon sotilmagan — to'lovlar olinmadi.`);
+      continue;
+    }
+    if (!client.totalPrice && grid.totalPrice) client.totalPrice = Math.round(grid.totalPrice);
+    payments.push(...grid.payments.map((p) => ({ ...p, apartmentId: num })));
+  }
+
+  return { apartments: [...apartments.values()].sort((a, b) => a.id - b.id), clients, payments, errors, warnings };
 }
 
-/** Bo'sh shablon fayl — mijozlar Excelni qanday tayyorlashini bilishi uchun. */
-export function downloadTemplate() {
-  const header = [
-    "Xonadon raqami", "Podyezd", "Qavat", "Maydon (m²)", "Xonalar soni", "Holati", "F.I.O", "Pasport",
-    "Telefon", "Shartnoma raqami", "Shartnoma sanasi", "Umumiy narx", "Boshlang'ich to'lov",
-    "Oylik to'lov", "Muddat (oy)", "Oxirgi to'lov sanasi",
-  ];
-  const rows = Array.from({ length: BUILDING.total }, (_, i) => {
-    const { entrance, floor } = locateApartment(i + 1);
-    return [i + 1, entrance, floor, "", "", "Bo'sh", "", "", "", "", "", "", "", "", "", ""];
+// ---------- Shablon va eksport (xuddi shu formatda) ----------
+
+const MAIN_HEADER = [
+  "Etaj", "Podez", "Xonadon raqami tartib bo'yicha", "Maydoni (м.2)", "Umumiy maydoni", "Yashash maydoni",
+  "Shartnoma raqami", "Shartnoma sanasi", "Shartnoma summasi", "Ism Familya",
+  // Qo'shimcha (ixtiyoriy) ustunlar — qarz muddatini kuzatish va SMS uchun
+  "Xonalar soni", "Telefon", "Pasport", "Boshlang'ich to'lov", "Oylik to'lov", "Muddat (oy)",
+];
+
+/** Faylingizdagi tartib: har qavatda avval 1-podyezd (1,2,3,4), keyin 2-podyezd (29,30,31,32). */
+function mainSheetOrder() {
+  const order = [];
+  for (let floor = 1; floor <= BUILDING.floors; floor++) {
+    for (let entrance = 1; entrance <= BUILDING.entrances; entrance++) {
+      const first = (entrance - 1) * BUILDING.floors * BUILDING.perFloor + (floor - 1) * BUILDING.perFloor + 1;
+      for (let k = 0; k < BUILDING.perFloor; k++) order.push({ id: first + k, floor, entrance, first: k === 0 });
+    }
+  }
+  return order;
+}
+
+function buildMainSheet(apartments, clientByApt) {
+  const aptById = new Map(apartments.map((a) => [a.id, a]));
+  const aoa = [MAIN_HEADER];
+  const merges = [];
+  mainSheetOrder().forEach(({ id, floor, entrance, first }) => {
+    const a = aptById.get(id) ?? {};
+    const c = clientByApt.get(id);
+    const r = aoa.length;
+    if (first && entrance === 1) merges.push({ s: { r, c: 0 }, e: { r: r + BUILDING.perFloor * BUILDING.entrances - 1, c: 0 } });
+    if (first) merges.push({ s: { r, c: 1 }, e: { r: r + BUILDING.perFloor - 1, c: 1 } });
+    aoa.push([
+      first && entrance === 1 ? `${floor}-Etaj` : "",
+      first ? entrance : "",
+      id,
+      a.area ? `${String(a.area).replace(".", ",")} м2` : "",
+      a.totalArea || "",
+      a.livingArea || "",
+      c?.contractNumber ?? "",
+      c ? fmtDmy(c.contractDate) : "",
+      c?.totalPrice || "",
+      c ? c.fullName : "sotilmagan",
+      a.rooms || "",
+      c?.phone ?? "",
+      c?.passport ?? "",
+      c?.downPayment || "",
+      c?.monthlyPayment || "",
+      c?.installmentMonths || "",
+    ]);
   });
-  rows[0] = [1, 1, 1, 64.5, 2, "Sotilgan", "Abdullayev Jasur Akmalovich", "AB 1234567", "+998 90 123-45-67",
-    "BB-2024/001", "15.01.2024", 450000000, 150000000, 12500000, 24, "15.10.2026"];
-
-  const paymentsHeader = ["Shartnoma raqami", "Sana", "Turi", "Summa", "Izoh"];
-  const paymentsRows = [
-    ["BB-2024/001", "15.01.2024", "Bank o'tkazmasi", 150000000, "Boshlang'ich to'lov, to'lov topshiriqnomasi №112"],
-    ["BB-2024/001", "15.02.2024", "Humo terminal", 12500000, "Fevral oyi uchun"],
-  ];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), "Mijozlar");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([paymentsHeader, ...paymentsRows]), "To'lovlar");
-  XLSX.writeFile(wb, "Bahra_Building_shablon.xlsx");
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = merges;
+  ws["!cols"] = [8, 7, 12, 12, 10, 10, 11, 12, 14, 34, 8, 18, 13, 14, 12, 9].map((wch) => ({ wch }));
+  return ws;
 }
 
-/** Joriy bazani Excelga eksport qilish (zaxira nusxa / hisobot). */
-export function exportToExcel({ apartments, clients, payments }) {
-  const byId = new Map(clients.map((c) => [c.id, c]));
+const GRID_HEADER = ["", "Sana", "Officega to'lov", "Terminal Humo", "Terminal uzcard", "Bank", "Shartnoma summasi", "Izoh"];
+const TYPE_COL = { cash: 2, humo: 3, uzcard: 4, bank: 5 };
+
+/** Bitta xonadon/mijozning to'lovlar jadvali — faylingizdagi "N-xonadon" varag'i ko'rinishida. */
+function buildGridSheet(title, totalPrice, payments, minRows = 28) {
+  const list = [...payments].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  const aoa = [[title ?? ""], GRID_HEADER];
+  const rowCount = Math.max(minRows, list.length + 5);
+  for (let i = 0; i < rowCount; i++) {
+    const p = list[i];
+    const row = [i + 1, p ? fmtDmy(p.date) : "", "", "", "", "", i === 0 ? totalPrice || "" : "", p?.comment ?? ""];
+    if (p) row[TYPE_COL[p.type]] = p.amount;
+    aoa.push(row);
+  }
+  const first = 3; // Excel'dagi birinchi ma'lumot qatori
+  const last = first + rowCount - 1;
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const sumRow = last + 1;
+  ["C", "D", "E", "F"].forEach((col) => {
+    ws[`${col}${sumRow}`] = { t: "n", f: `SUM(${col}${first}:${col}${last})` };
+  });
+  ws[`A${sumRow + 1}`] = { t: "s", v: "jami:" };
+  ws[`B${sumRow + 1}`] = { t: "n", f: `C${sumRow}+D${sumRow}+E${sumRow}+F${sumRow}` };
+  ws[`A${sumRow + 2}`] = { t: "s", v: "qarzdorligi" };
+  ws[`B${sumRow + 2}`] = { t: "n", f: `G${first}-B${sumRow + 1}` };
+  ws["!ref"] = `A1:H${sumRow + 2}`;
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+  ws["!cols"] = [5, 12, 15, 15, 15, 15, 17, 40].map((wch) => ({ wch }));
+  return ws;
+}
+
+/**
+ * C-blok ko'rinishidagi to'liq fayl.
+ * withData=false — shablon: xonadonlar (maydonlar) to'ldirilgan, mijoz va to'lovlar bo'sh.
+ */
+export function downloadFullWorkbook({ apartments, clients, payments }, withData = true) {
+  const clientByApt = new Map(withData ? clients.map((c) => [c.apartmentId, c]) : []);
+  const paysByClient = new Map();
+  if (withData) for (const p of payments) paysByClient.set(p.clientId, [...(paysByClient.get(p.clientId) ?? []), p]);
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(
-      apartments.map((a) => {
-        const c = byId.get(a.clientId);
-        return {
-          "Xonadon raqami": a.id, Podyezd: a.entrance, Qavat: a.floor, "Maydon (m²)": a.area,
-          "Xonalar soni": a.rooms, Holati: a.status === "sold" ? "Sotilgan" : "Bo'sh",
-          "F.I.O": c?.fullName ?? "", Pasport: c?.passport ?? "", Telefon: c?.phone ?? "",
-          "Shartnoma raqami": c?.contractNumber ?? "", "Shartnoma sanasi": c?.contractDate ?? "",
-          "Umumiy narx": c?.totalPrice ?? "", "Boshlang'ich to'lov": c?.downPayment ?? "",
-          "Oylik to'lov": c?.monthlyPayment ?? "", "Muddat (oy)": c?.installmentMonths ?? "",
-        };
-      }),
-    ),
-    "Mijozlar",
-  );
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(
-      payments.map((p) => ({
-        "Shartnoma raqami": byId.get(p.clientId)?.contractNumber ?? p.clientId,
-        Sana: p.date, Turi: p.type, Summa: p.amount, Izoh: p.comment,
-      })),
-    ),
-    "To'lovlar",
-  );
-  XLSX.writeFile(wb, `Bahra_CRM_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, buildMainSheet(apartments, clientByApt), "umumiy");
+  for (let n = 1; n <= BUILDING.total; n++) {
+    const c = clientByApt.get(n);
+    XLSX.utils.book_append_sheet(wb, buildGridSheet(c?.fullName ?? "", c?.totalPrice, c ? paysByClient.get(c.id) ?? [] : []), `${n}-xonadon`);
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, withData ? `${COMPANY.brand}_C-blok_${date}.xlsx` : `${COMPANY.brand}_C-blok_shablon.xlsx`);
+}
+
+/** Bitta mijozning to'lovlar jadvali (to'lov grafigi). client bo'lmasa — bo'sh shablon. */
+export function downloadPaymentSchedule(client, payments = []) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildGridSheet(client?.fullName ?? "", client?.totalPrice, payments, 40), "to'lov");
+  XLSX.writeFile(wb, client ? `Tolovlar_${client.apartmentId}-xonadon.xlsx` : "Tolovlar_jadvali_shablon.xlsx");
 }

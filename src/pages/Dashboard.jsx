@@ -3,7 +3,7 @@ import { Wallet, CalendarDays, CalendarRange, Building2, AlertTriangle, PiggyBan
 import { useCrm } from "../store/CrmContext";
 import { periodTotals } from "../utils/analytics";
 import { fmtMoney, fmtShort, fmtDate } from "../utils/format";
-import { exportToExcel } from "../utils/excel";
+import { downloadFullWorkbook } from "../utils/excel";
 import { PageHeader, StatCard, ProgressBar } from "../components/ui";
 import RevenueChart from "../components/dashboard/RevenueChart";
 import PaymentTypePie from "../components/dashboard/PaymentTypePie";
@@ -33,7 +33,7 @@ export default function Dashboard() {
         subtitle="Bahra Building — 7 qavat, 2 podyezd, 56 xonadon"
         actions={
           <>
-            <button className="btn-secondary" onClick={() => exportToExcel(crm)}><Download size={16} /> Excelga eksport</button>
+            <button className="btn-secondary" onClick={() => downloadFullWorkbook(crm)}><Download size={16} /> Excelga eksport</button>
             {can("ai:use") && <button className="btn-primary" onClick={() => open("cfo", "Dashboard'dagi haftalik, oylik va yillik tushumlarni tahlil qilib, kassa uzilishi xavfini baholang.")}>
               AI Moliyachi tahlili
             </button>}

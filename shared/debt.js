@@ -21,8 +21,14 @@ export function buildSchedule(client) {
   return rows;
 }
 
+/** Oxirgi to'lovdan shuncha kun o'tsa, grafigi kiritilmagan mijoz "to'lov to'xtagan" ro'yxatiga tushadi. */
+export const STALE_DAYS = 30;
+
 /**
- * @returns {{ paid, expected, debt, remaining, overdueDays, nextDue, isDebtor, lastPaymentDate, progress }}
+ * Grafik (boshlang'ich + oylik to'lov) kiritilgan bo'lsa — muddati o'tgan qarz grafik bo'yicha hisoblanadi.
+ * Kiritilmagan bo'lsa (masalan, eski Excel'dan import qilingan mijoz) — qarzni aniqlab bo'lmaydi;
+ * buning o'rniga oxirgi to'lovdan beri qancha kun o'tgani kuzatiladi (stale).
+ * @returns {{ paid, expected, debt, remaining, overdueDays, nextDue, isDebtor, hasSchedule, stale, daysSinceLastPayment, lastPaymentDate, progress }}
  */
 export function calcClientDebt(client, payments, asOf = new Date().toISOString().slice(0, 10)) {
   const own = payments.filter((p) => p.clientId === client.id);
@@ -39,15 +45,23 @@ export function calcClientDebt(client, payments, asOf = new Date().toISOString()
   const overdueDays = debt > 0 && firstUnpaid && firstUnpaid.date <= asOf ? daysBetween(firstUnpaid.date, asOf) : 0;
   const nextDue = schedule.find((r) => r.date > asOf) ?? null;
 
+  const hasSchedule = client.monthlyPayment > 0 || client.downPayment > 0;
+  const remaining = Math.max(0, client.totalPrice - paid);
+  const sinceDate = lastPaymentDate ?? client.contractDate;
+  const daysSinceLastPayment = sinceDate && sinceDate <= asOf ? daysBetween(sinceDate, asOf) : 0;
+
   return {
     paid,
     expected,
     debt,
-    remaining: Math.max(0, client.totalPrice - paid),
+    remaining,
     overdueDays,
     nextDue,
     lastPaymentDate,
-    isDebtor: debt > 0 && overdueDays > 0,
+    isDebtor: hasSchedule && debt > 0 && overdueDays > 0,
+    hasSchedule,
+    daysSinceLastPayment,
+    stale: !hasSchedule && remaining > 0 && daysSinceLastPayment > STALE_DAYS,
     progress: client.totalPrice ? Math.min(100, (paid / client.totalPrice) * 100) : 0,
   };
 }
