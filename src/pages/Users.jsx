@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UserPlus, KeyRound, Loader2 } from "lucide-react";
+import { UserPlus, KeyRound, Loader2, Bot } from "lucide-react";
 import { api } from "../services/api";
 import { useAuth } from "../store/AuthContext";
 import { PageHeader, Modal, Badge } from "../components/ui";
@@ -46,6 +46,8 @@ export default function Users() {
           </div>
         ))}
       </div>
+
+      <AiCheck />
 
       <div className="card overflow-x-auto">
         <table className="w-full">
@@ -125,5 +127,42 @@ function UserForm({ modal, onDone }) {
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <div className="flex justify-end"><button className="btn-primary" disabled={busy}>{busy && <Loader2 size={16} className="animate-spin" />} Saqlash</button></div>
     </form>
+  );
+}
+
+/** AI kaliti va ulanishni tekshirish (kalitning o'zi ko'rsatilmaydi). */
+function AiCheck() {
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await api("/ai/diagnose"));
+    } catch (e) {
+      setResult({ ok: false, error: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const label = { anthropic: "Claude", gemini: "Google Gemini (bepul)", none: "o'rnatilmagan" };
+  return (
+    <div className="card mb-4 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Bot size={18} className="text-slate-500" />
+        <p className="flex-1 text-sm font-medium text-slate-800">AI yordamchilar ulanishi</p>
+        <button className="btn-secondary" onClick={run} disabled={busy}>
+          {busy && <Loader2 size={15} className="animate-spin" />} Tekshirish
+        </button>
+      </div>
+      {result && (
+        <div className={`mt-3 rounded-lg p-3 text-sm ${result.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>
+          <p><b>Xizmat:</b> {label[result.provider] ?? result.provider ?? "—"} · <b>{result.ok ? "ishlayapti ✓" : "xato"}</b></p>
+          {result.keyLength !== undefined && <p className="text-xs">Kalit: {result.keyPrefix}… ({result.keyLength} belgi)</p>}
+          {result.models && <p className="text-xs">Mavjud modellar: {result.models.join(", ") || "—"}</p>}
+          {result.error && <p className="mt-1">{result.error}</p>}
+          {result.detail && <p className="mt-1 break-all font-mono text-xs opacity-80">{result.detail}</p>}
+        </div>
+      )}
+    </div>
   );
 }

@@ -3,12 +3,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import { AGENTS } from "../agents/prompts.js";
 import { config } from "../config.js";
 import { requirePerm } from "../auth/middleware.js";
-import { GeminiError, geminiConfigured, streamGemini } from "../ai/gemini.js";
+import { GeminiError, diagnoseGemini, geminiConfigured, streamGemini } from "../ai/gemini.js";
 import { anonymizeContext, anonymizeMessages, PRIVACY_NOTE } from "../ai/anonymize.js";
 
 const router = Router();
 const client = new Anthropic(); // ANTHROPIC_API_KEY ni muhitdan oladi
 const MODEL = config.aiModel;
+// Server tomonidagi zaxira model (refusal fallback) faqat shu modellarda bor
+const FALLBACK_MODELS = new Set(["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"]);
 
 /**
  * Qaysi AI xizmati ishlatiladi: AI_PROVIDER ("anthropic" | "gemini") yoki qaysi kalit borligiga qarab.
@@ -25,7 +27,18 @@ function provider() {
 /** GET /api/ai/info — chat oynasida qaysi xizmat ishlayotganini ko'rsatish uchun */
 router.get("/info", (_req, res) => {
   const p = provider();
-  res.json({ provider: p, anonymized: p === "gemini" });
+  res.json({ provider: p, anonymized: p === "gemini", model: p === "anthropic" ? MODEL : undefined });
+});
+
+/** GET /api/ai/diagnose — rahbar uchun: AI kaliti va ulanishni tekshirish (kalitning o'zi ko'rsatilmaydi) */
+router.get("/diagnose", requirePerm("users:manage"), async (_req, res) => {
+  const p = provider();
+  if (p !== "gemini") return res.json({ provider: p, ok: p !== "none" });
+  try {
+    res.json({ provider: p, ok: true, ...(await diagnoseGemini()) });
+  } catch (err) {
+    res.json({ provider: p, ok: false, error: explainGemini(err), detail: String(err?.message ?? err).slice(0, 300) });
+  }
 });
 
 /**
@@ -98,7 +111,7 @@ router.post("/chat", requirePerm("ai:use"), async (req, res) => {
   try {
     let final;
     try {
-      final = await run(true);
+      final = await run(FALLBACK_MODELS.has(MODEL));
     } catch (err) {
       // Zaxira model sozlamasi qabul qilinmasa (400) — oddiy so'rov bilan qayta urinish
       if (!wrote && err instanceof Anthropic.BadRequestError && /fallback|beta/i.test(err.message)) {
@@ -138,13 +151,15 @@ async function chatGemini(req, res, agentSystem, history, context) {
     res.end();
   } catch (err) {
     if (err.name === "AbortError") return res.end();
-    console.error("[AI/Gemini]", err);
+    console.error("[AI/Gemini]", err?.status, err?.reason, err?.message, err?.stack);
     res.end(`\n\n⚠️ ${explainGemini(err)}`);
   }
 }
 
 function explainGemini(err) {
-  if (!(err instanceof GeminiError)) return "Gemini xizmatiga ulanib bo'lmadi.";
+  if (!(err instanceof GeminiError)) return `Serverdagi xato: ${String(err?.message ?? err).slice(0, 200)}`;
+  if (err.reason === "NETWORK") return `Gemini serveriga ulanib bo'lmadi (${err.message.slice(0, 160)}).`;
+  if (/location is not supported|User location/i.test(err.message)) return "Google Gemini bu server joylashgan hududda ishlamaydi.";
   if (err.reason === "API_KEY_INVALID" || err.status === 401) return "Gemini kaliti noto'g'ri. Render → Environment → GEMINI_API_KEY ni tekshiring.";
   if (err.status === 429) return "Gemini bepul limiti tugadi (daqiqalik yoki kunlik). Birozdan so'ng yoki ertaga urinib ko'ring.";
   if (err.status === 403) return "Bu Gemini kalitiga ruxsat yo'q (hudud yoki loyiha cheklovi).";

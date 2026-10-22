@@ -3,7 +3,8 @@
 // shuning uchun bu provayderga mijoz ismlari va telefonlari yuborilmaydi (anonymize.js).
 
 const BASE = process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
-const key = () => process.env.GEMINI_API_KEY;
+// Nusxalashda qo'shilib qolgan bo'shliq, qo'shtirnoq yoki yangi qatorlarni olib tashlash
+const key = () => String(process.env.GEMINI_API_KEY ?? "").trim().replace(/^["']|["']$/g, "");
 
 export class GeminiError extends Error {
   constructor(status, reason, message) {
@@ -14,10 +15,17 @@ export class GeminiError extends Error {
 }
 
 async function call(path, init = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key(), ...(init.headers ?? {}) },
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key(), ...(init.headers ?? {}) },
+    });
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+    // Tarmoq darajasidagi xato (DNS, TLS, ulanish) — sababini ko'rsatamiz
+    throw new GeminiError(0, "NETWORK", `${e.message}${e.cause ? `: ${e.cause.code ?? ""} ${e.cause.message ?? ""}` : ""}`);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const reason = body?.error?.details?.find((d) => d.reason)?.reason ?? body?.error?.status ?? "";
@@ -116,3 +124,10 @@ async function readSse(res, onText) {
 }
 
 export const geminiConfigured = () => Boolean(key());
+
+/** Diagnostika: kalit ishlaydimi va qaysi modellar mavjud. */
+export async function diagnoseGemini() {
+  candidates = null; // ro'yxatni yangidan olish
+  const list = await modelCandidates();
+  return { keyLength: key().length, keyPrefix: key().slice(0, 4), models: list.slice(0, 8), working };
+}
