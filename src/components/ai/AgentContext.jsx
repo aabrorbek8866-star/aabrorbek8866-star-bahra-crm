@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useCrm } from "../../store/CrmContext";
 import { useAuth } from "../../store/AuthContext";
 import { buildAiContext } from "../../services/aiContext";
-import { streamAgentChat } from "../../services/api";
+import { api, streamAgentChat } from "../../services/api";
 
 const AgentCtx = createContext(null);
 
@@ -31,6 +31,11 @@ export function AgentProvider({ children }) {
   const historiesRef = useRef(histories);
   historiesRef.current = histories;
   const [busy, setBusy] = useState({});
+  const [info, setInfo] = useState(null); // { provider: "anthropic" | "gemini" | "none", anonymized }
+
+  useEffect(() => {
+    api("/ai/info").then(setInfo).catch(() => setInfo(null));
+  }, []);
   const controllers = useRef({});
 
   useEffect(() => {
@@ -93,7 +98,7 @@ export function AgentProvider({ children }) {
   }, [send]);
 
   const value = useMemo(
-    () => ({ isOpen, setOpen, active, setActive, histories, busy, send, stop, clear, open }),
+    () => ({ isOpen, setOpen, active, setActive, histories, busy, send, stop, clear, open, info }),
     [isOpen, active, histories, busy, send, stop, clear, open],
   );
   return <AgentCtx.Provider value={value}>{children}</AgentCtx.Provider>;

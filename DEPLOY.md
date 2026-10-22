@@ -43,7 +43,10 @@ har kuni avtomatik zaxira nusxa olinadi. Hammasi bepul, bank kartasi talab qilin
 3. So'raladigan qiymatlarni kiriting:
    - `DATABASE_URL` — Neon'dan nusxalangan qator
    - `ADMIN_PASSWORD` — rahbar uchun kuchli parol (kamida 8 belgi, yaxshisi 12+)
-   - `ANTHROPIC_API_KEY` — AI agentlar uchun (https://console.anthropic.com → API Keys). Hozircha bo'sh qoldirish mumkin.
+   - `ANTHROPIC_API_KEY` — AI agentlar uchun (https://console.anthropic.com → API Keys, pullik). Hozircha bo'sh qoldirish mumkin.
+   - `GEMINI_API_KEY` — AI agentlar uchun **bepul** muqobil (https://aistudio.google.com → Get API key).
+     Faqat shu kalit bo'lsa Gemini ishlatiladi; mijoz ismlari va telefonlari Google'ga yuborilmaydi
+     ("№46-xonadon mijozi" deb almashtiriladi). Bepul tarifda kunlik limit bor.
    - `ESKIZ_EMAIL`, `ESKIZ_PASSWORD` — SMS uchun (https://eskiz.uz). Bo'sh bo'lsa SMS yuborilmaydi, faqat jurnalga yoziladi.
 4. **Apply**. Birinchi build 3–5 daqiqa davom etadi. Tayyor bo'lgach yuqorida manzil chiqadi:
    `https://bahra-crm.onrender.com` (nom band bo'lsa, oxiriga qo'shimcha harflar qo'shiladi).

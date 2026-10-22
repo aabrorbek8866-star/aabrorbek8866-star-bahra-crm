@@ -8,7 +8,8 @@ import { useAgents } from "./AgentContext";
  * @param {{ agent: import("./agents").AGENTS["ceo"] }} props
  */
 export default function AgentChat({ agent }) {
-  const { histories, busy, send, stop, clear } = useAgents();
+  const { histories, busy, send, stop, clear, info } = useAgents();
+  const providerLabel = { anthropic: "Claude", gemini: "Gemini (bepul) · ismlar yuborilmaydi", none: "AI kaliti o'rnatilmagan" }[info?.provider];
   const messages = histories[agent.id];
   const isBusy = !!busy[agent.id];
   const [input, setInput] = useState("");
@@ -34,6 +35,11 @@ export default function AgentChat({ agent }) {
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-slate-900">{agent.name}</p>
           <p className="truncate text-xs text-slate-500">{agent.role} · CRM ma'lumotlariga ulangan</p>
+          {providerLabel && (
+            <p className={`truncate text-[11px] ${info.provider === "none" ? "text-red-600" : info.anonymized ? "text-emerald-700" : "text-slate-400"}`}>
+              {info.anonymized ? "🔒 " : ""}{providerLabel}
+            </p>
+          )}
         </div>
         {messages.length > 0 && (
           <button onClick={() => clear(agent.id)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600" title="Suhbatni tozalash">

@@ -3,10 +3,30 @@ import Anthropic from "@anthropic-ai/sdk";
 import { AGENTS } from "../agents/prompts.js";
 import { config } from "../config.js";
 import { requirePerm } from "../auth/middleware.js";
+import { GeminiError, geminiConfigured, streamGemini } from "../ai/gemini.js";
+import { anonymizeContext, anonymizeMessages, PRIVACY_NOTE } from "../ai/anonymize.js";
 
 const router = Router();
 const client = new Anthropic(); // ANTHROPIC_API_KEY ni muhitdan oladi
 const MODEL = config.aiModel;
+
+/**
+ * Qaysi AI xizmati ishlatiladi: AI_PROVIDER ("anthropic" | "gemini") yoki qaysi kalit borligiga qarab.
+ * Claude kaliti bo'lsa — Claude; faqat Gemini kaliti bo'lsa — Gemini (bepul, ismlarsiz).
+ */
+function provider() {
+  const forced = String(process.env.AI_PROVIDER ?? "").toLowerCase();
+  if (forced === "gemini" || forced === "anthropic") return forced;
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (geminiConfigured()) return "gemini";
+  return "none";
+}
+
+/** GET /api/ai/info — chat oynasida qaysi xizmat ishlayotganini ko'rsatish uchun */
+router.get("/info", (_req, res) => {
+  const p = provider();
+  res.json({ provider: p, anonymized: p === "gemini" });
+});
 
 /**
  * POST /api/ai/chat
@@ -30,6 +50,12 @@ router.post("/chat", requirePerm("ai:use"), async (req, res) => {
 
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
+
+  const p = provider();
+  if (p === "none") {
+    return res.end("⚠️ AI kaliti o'rnatilmagan. Render → bahra-crm → Environment bo'limida GEMINI_API_KEY (bepul) yoki ANTHROPIC_API_KEY ni kiriting.");
+  }
+  if (p === "gemini") return chatGemini(req, res, config.system, history, context);
 
   const request = (withFallback) => {
     const params = {
@@ -95,6 +121,37 @@ router.post("/chat", requirePerm("ai:use"), async (req, res) => {
     res.end(`\n\n⚠️ ${explain(err)}`);
   }
 });
+
+/** Gemini orqali javob: mijoz ismlari va telefonlari yuborilmaydi. */
+async function chatGemini(req, res, agentSystem, history, context) {
+  const controller = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+  try {
+    const safeContext = anonymizeContext(context ?? {});
+    const safeHistory = await anonymizeMessages(history);
+    const system = `${agentSystem}\n${PRIVACY_NOTE}\n\n<crm_data generated_at="${new Date().toISOString()}">\n${JSON.stringify(safeContext, null, 1)}\n</crm_data>`;
+    const { finishReason } = await streamGemini({ system, messages: safeHistory, signal: controller.signal, onText: (t) => res.write(t) });
+    if (finishReason === "MAX_TOKENS") res.write("\n\n_(Javob uzunlik chegarasiga yetdi — davomini so'rang.)_");
+    else if (finishReason === "SAFETY" || finishReason === "BLOCKED") res.write("\n\n_So'rov xavfsizlik filtri sababli bajarilmadi. Savolni boshqacha ifodalang._");
+    res.end();
+  } catch (err) {
+    if (err.name === "AbortError") return res.end();
+    console.error("[AI/Gemini]", err);
+    res.end(`\n\n⚠️ ${explainGemini(err)}`);
+  }
+}
+
+function explainGemini(err) {
+  if (!(err instanceof GeminiError)) return "Gemini xizmatiga ulanib bo'lmadi.";
+  if (err.reason === "API_KEY_INVALID" || err.status === 401) return "Gemini kaliti noto'g'ri. Render → Environment → GEMINI_API_KEY ni tekshiring.";
+  if (err.status === 429) return "Gemini bepul limiti tugadi (daqiqalik yoki kunlik). Birozdan so'ng yoki ertaga urinib ko'ring.";
+  if (err.status === 403) return "Bu Gemini kalitiga ruxsat yo'q (hudud yoki loyiha cheklovi).";
+  if (err.status === 404) return "Mos Gemini modeli topilmadi. Render'da GEMINI_MODEL ni bo'sh qoldiring yoki to'g'ri nom kiriting.";
+  if (err.status >= 500) return "Gemini xizmati hozir band, birozdan so'ng urinib ko'ring.";
+  return `Gemini xatosi (${err.status}): ${err.message.slice(0, 200)}`;
+}
 
 /** Xatoni foydalanuvchi tushunadigan tilda tushuntirish. */
 function explain(err) {
