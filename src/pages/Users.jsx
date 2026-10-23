@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { UserPlus, KeyRound, Loader2, Bot } from "lucide-react";
+import { UserPlus, KeyRound, Loader2, Bot, MessageSquare } from "lucide-react";
+import { COMPANY } from "../../shared/company.js";
 import { api } from "../services/api";
 import { useAuth } from "../store/AuthContext";
 import { PageHeader, Modal, Badge } from "../components/ui";
@@ -47,6 +48,7 @@ export default function Users() {
         ))}
       </div>
 
+      <SmsCheck />
       <AiCheck />
 
       <div className="card overflow-x-auto">
@@ -162,6 +164,76 @@ function AiCheck() {
           {result.error && <p className="mt-1">{result.error}</p>}
           {result.detail && <p className="mt-1 break-all font-mono text-xs opacity-80">{result.detail}</p>}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Eskiz SMS: kirishni tekshirish va o'z raqamiga sinov SMS. */
+function SmsCheck() {
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState(`${COMPANY.brand}: sinov xabari.`);
+  const [testResult, setTestResult] = useState(null);
+
+  const check = async () => {
+    setBusy(true);
+    try {
+      setResult(await api("/sms/diagnose"));
+    } catch (e) {
+      setResult({ ok: false, error: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendTest = async () => {
+    setBusy(true);
+    setTestResult(null);
+    try {
+      await api("/sms/test", { method: "POST", body: { phone, message } });
+      setTestResult({ ok: true });
+    } catch (e) {
+      setTestResult({ ok: false, error: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card mb-4 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <MessageSquare size={18} className="text-slate-500" />
+        <p className="flex-1 text-sm font-medium text-slate-800">SMS (Eskiz.uz) ulanishi</p>
+        <button className="btn-secondary" onClick={check} disabled={busy}>
+          {busy && !testResult && <Loader2 size={15} className="animate-spin" />} Tekshirish
+        </button>
+      </div>
+      {result && (
+        <div className={`mt-3 rounded-lg p-3 text-sm ${result.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>
+          {!result.configured ? (
+            <p>Eskiz sozlanmagan — Render → bahra-crm → Environment'da <b>ESKIZ_EMAIL</b> va <b>ESKIZ_PASSWORD</b> ni kiriting.</p>
+          ) : result.ok ? (
+            <>
+              <p><b>Eskiz'ga kirish ishlayapti ✓</b> · {result.email} · yuboruvchi: <b>{result.from}</b></p>
+              {result.balance !== null && result.balance !== undefined && <p className="text-xs">Balans: {result.balance}</p>}
+              {result.from === "4546" && <p className="mt-1 text-xs">"4546" — Eskiz'ning umumiy raqami. O'z nomingiz (masalan, BAHRA) tasdiqlangach ESKIZ_FROM ga yozing.</p>}
+            </>
+          ) : (
+            <p className="break-words">{result.error}</p>
+          )}
+        </div>
+      )}
+      <div className="mt-3 grid gap-2 sm:grid-cols-[180px_1fr_auto]">
+        <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" />
+        <input className="input" value={message} onChange={(e) => setMessage(e.target.value)} />
+        <button className="btn-primary" onClick={sendTest} disabled={busy || !phone.trim() || !message.trim()}>Test SMS</button>
+      </div>
+      {testResult && (
+        <p className={`mt-2 rounded-lg px-3 py-2 text-sm ${testResult.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>
+          {testResult.ok ? "Eskiz SMS'ni qabul qildi — telefoningizni tekshiring." : testResult.error}
+        </p>
       )}
     </div>
   );
