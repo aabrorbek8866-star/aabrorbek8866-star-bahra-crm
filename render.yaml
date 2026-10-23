@@ -35,3 +35,5 @@ services:
         sync: false
       - key: ESKIZ_PASSWORD
         sync: false
+      - key: ESKIZ_FROM         # Eskiz tasdiqlagan yuboruvchi nomi (nickname); tasdiqlanmaguncha 4546
+        value: "4546"
