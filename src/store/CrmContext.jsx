@@ -45,6 +45,7 @@ export function CrmProvider({ children }) {
     addPayment: async (payment) => {
       const saved = await api("/payments", { method: "POST", body: payment });
       setState((s) => ({ ...s, payments: [...s.payments, saved] }));
+      return saved;
     },
     updatePayment: async (id, patch) => {
       const saved = await api(`/payments/${id}`, { method: "PATCH", body: patch });

@@ -8,6 +8,7 @@ import PaymentList from "../components/payments/PaymentList";
 import ContractUpload from "../components/clients/ContractUpload";
 import ClientForm from "../components/clients/ClientForm";
 import NotaryCard from "../components/clients/NotaryCard";
+import ReceiptModal from "../components/payments/ReceiptModal";
 import PaymentScheduleImport from "../components/payments/PaymentScheduleImport";
 import { downloadPaymentSchedule } from "../utils/excel";
 import { useAgents } from "../components/ai/AgentContext";
@@ -23,6 +24,7 @@ export default function ClientProfile() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [receipt, setReceipt] = useState(null); // chek chiqariladigan to'lov
   const client = clientById.get(Number(id));
 
   if (!client) {
@@ -143,6 +145,7 @@ export default function ClientProfile() {
             payments={own}
             onUpdate={can("payments:update") ? updatePayment : null}
             onDelete={can("payments:delete") ? deletePayment : null}
+            onReceipt={setReceipt}
           />
         </div>
       </div>
@@ -151,9 +154,15 @@ export default function ClientProfile() {
         <PaymentForm
           defaultAmount={client.isDebtor ? String(client.debt) : client.monthlyPayment ? String(client.monthlyPayment) : ""}
           onCancel={() => setAdding(false)}
-          onSubmit={async (p) => { await addPayment({ ...p, clientId: client.id }); setAdding(false); }}
+          onSubmit={async (p) => {
+            const saved = await addPayment({ ...p, clientId: client.id });
+            setAdding(false);
+            setReceipt(saved); // to'lov saqlangach chek darhol chiqadi
+          }}
         />
       </Modal>
+
+      <ReceiptModal client={client} payment={receipt} onClose={() => setReceipt(null)} />
 
       <Modal open={editing} onClose={() => setEditing(false)} title={`№${client.apartmentId} xonadon — mijoz ma'lumotlari`} wide>
         {editing && (

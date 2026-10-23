@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CreditCard, Landmark, Banknote, MessageSquareText, Pencil, Trash2, Receipt } from "lucide-react";
+import { CreditCard, Landmark, Banknote, MessageSquareText, Pencil, Trash2, Receipt, Printer } from "lucide-react";
 import { PAYMENT_TYPES } from "../../data/schema";
 import { fmtDate, fmtMoney } from "../../utils/format";
 import { Badge, EmptyState, Modal } from "../ui";
@@ -11,7 +11,7 @@ const ICONS = { humo: CreditCard, uzcard: CreditCard, bank: Landmark, cash: Bank
  * Mijozning barcha to'lovlari ro'yxati (kassa, bank, terminallar).
  * Har bir to'lov tagida batafsil "Izoh" bloki ko'rsatiladi.
  */
-export default function PaymentList({ payments, onUpdate, onDelete }) {
+export default function PaymentList({ payments, onUpdate, onDelete, onReceipt }) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [editing, setEditing] = useState(null);
@@ -89,6 +89,9 @@ export default function PaymentList({ payments, onUpdate, onDelete }) {
                     </div>
                     <Badge className={meta.badge}>{meta.label}</Badge>
                     <div className="flex gap-1">
+                      {onReceipt && (
+                        <button className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Chek (chop etish)" onClick={() => onReceipt(p)}><Printer size={15} /></button>
+                      )}
                       {onUpdate && (
                         <button className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Tahrirlash" onClick={() => setEditing(p)}><Pencil size={15} /></button>
                       )}

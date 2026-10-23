@@ -154,3 +154,23 @@ export function notaryTemplateData(p) {
     yil: y,
   };
 }
+
+// ---------- To'lov cheki (ma'lumotnoma) ----------
+
+/**
+ * Chek shabloni o'zgaruvchilari. Chek raqami — to'lovning bazadagi tartib raqami (takrorlanmaydi).
+ * @param {{ chekRaqam, sana (yyyy-mm-dd), qavat, xonadon, shartnomaRaqami, fio (kirill), summa }} p
+ */
+export function receiptTemplateData(p) {
+  const words = numberToWords(p.summa);
+  return {
+    chekRaqam: String(p.chekRaqam),
+    sana: dmy(p.sana),
+    qavat: String(p.qavat ?? ""),
+    xonadon: String(p.xonadon),
+    shartnomaRaqami: p.shartnomaRaqami,
+    fio: p.fio,
+    summa: groupDigits(p.summa).replace(/ /g, "\u00a0"),
+    summaSoz: words[0].toLowerCase() + words.slice(1), // chekda kichik harf bilan: "(беш юз ўттиз тўрт минг)"
+  };
+}
