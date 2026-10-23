@@ -14,9 +14,12 @@ const ACTIONS = {
   notarize: { label: "Notarius qilindi", cls: "bg-emerald-100 text-emerald-800" },
   unnotarize: { label: "Notarius bekor qilindi", cls: "bg-red-100 text-red-800" },
   notary_docs: { label: "Notarius hujjatlari tayyorlandi", cls: "bg-violet-100 text-violet-800" },
+  upload_passport: { label: "Pasport nusxasi yuklandi", cls: "bg-violet-100 text-violet-800" },
+  delete_passport: { label: "Pasport nusxasi o'chirildi", cls: "bg-red-100 text-red-800" },
+  delete_note: { label: "Izoh o'chirildi", cls: "bg-red-100 text-red-800" },
   password_change: { label: "Parol o'zgardi", cls: "bg-slate-100 text-slate-600" },
 };
-const ENTITIES = { apartment: "Xonadon", payment: "To'lov", client: "Mijoz", user: "Xodim", excel: "Excel", sms: "SMS" };
+const ENTITIES = { settings: "Sozlamalar", apartment: "Xonadon", payment: "To'lov", client: "Mijoz", user: "Xodim", excel: "Excel", sms: "SMS" };
 
 function describe(e) {
   const d = e.details ?? {};
@@ -30,7 +33,10 @@ function describe(e) {
   if (e.entity === "client" && e.action === "update") {
     return `${d.name}: ${Object.entries(d.changed ?? {}).map(([k, v]) => `${k}: ${v.from ?? "—"} → ${v.to}`).join("; ") || "o'zgarish yo'q"}`;
   }
-  if (e.entity === "client" && e.action === "notarize") return `${d.name} · ${d.date} · ${d.file}`;
+  if (e.entity === "client" && e.action === "notarize") return `${d.name} · ${d.date}${d.amount ? ` · ${fmtMoney(d.amount)}` : ""} · ${d.file}`;
+  if (e.entity === "client" && e.action === "upload_passport") return `${d.name} · ${(d.files ?? []).join(", ")}`;
+  if (e.entity === "client" && ["delete_passport", "delete_note"].includes(e.action)) return d.file ?? d.text ?? "";
+  if (e.entity === "settings") return `Soliq: ${d.regime === "turnover" ? `aylanma ${d.turnoverRate}%` : `QQS ${d.vatRate}%, foyda ${d.profitRate}%`}, baza: ${d.base === "notary" ? "notarius" : "to'lovlar"}`;
   if (e.entity === "client" && ["unnotarize", "notary_docs"].includes(e.action)) return d.name ?? "";
   if (e.entity === "client" && e.action !== "upload_contract") return `№${d.apartmentId} · ${d.name} · shartnoma ${d.contract}`;
   if (e.entity === "client") return d.name ?? "";

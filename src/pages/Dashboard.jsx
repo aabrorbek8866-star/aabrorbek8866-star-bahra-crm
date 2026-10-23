@@ -8,6 +8,8 @@ import { PageHeader, StatCard, ProgressBar } from "../components/ui";
 import RevenueChart from "../components/dashboard/RevenueChart";
 import PaymentTypePie from "../components/dashboard/PaymentTypePie";
 import SalesChart from "../components/dashboard/SalesChart";
+import TaxCard from "../components/dashboard/TaxCard";
+import NotaryStats from "../components/dashboard/NotaryStats";
 import { useAgents } from "../components/ai/AgentContext";
 import { useAuth } from "../store/AuthContext";
 
@@ -56,6 +58,11 @@ export default function Dashboard() {
         <StatCard label="Sotilgan xonadonlar" value={`${sold} / ${apartments.length}`} hint={`${apartments.length - sold} ta bo'sh`} icon={Building2} />
         <StatCard label="Yig'ilgan / shartnomalar" value={fmtShort(collected)} hint={`${fmtShort(contractValue)} dan, ${contractValue ? ((collected / contractValue) * 100).toFixed(1) : 0}%`} icon={PiggyBank} tone="green" />
         <StatCard label="Muddati o'tgan qarz" value={fmtMoney(totalDebt)} hint={`${debtors.length} ta qarzdor mijoz`} icon={AlertTriangle} tone="red" />
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        <div className="xl:col-span-2"><TaxCard payments={payments} clients={clients} /></div>
+        <NotaryStats clients={clients} />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">

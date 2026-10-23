@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
-import { Stamp, Upload, Eye, Download, Loader2, FileText, CheckCircle2, CircleDashed, Trash2 } from "lucide-react";
-import { removeNotary, uploadNotaryPdf } from "../../services/api";
-import { fmtDate, todayIso } from "../../utils/format";
+import { Stamp, Upload, Eye, Download, Loader2, FileText, CheckCircle2, CircleDashed, Trash2, Pencil, Check } from "lucide-react";
+import { api, removeNotary, uploadNotaryPdf } from "../../services/api";
+import { fmtDate, fmtMoney, todayIso } from "../../utils/format";
 import { Badge, Modal } from "../ui";
 import NotaryDocsForm from "./NotaryDocsForm";
 
@@ -17,6 +17,18 @@ export default function NotaryCard({ client, can, onClientChange }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preparing, setPreparing] = useState(false);
+  const [amount, setAmount] = useState(String(client.notaryAmount || client.totalPrice || ""));
+  const [editingAmount, setEditingAmount] = useState(false);
+
+  const saveAmount = async () => {
+    setError("");
+    try {
+      onClientChange(await api(`/clients/${client.id}`, { method: "PATCH", body: { notaryAmount: Number(amount) || null } }));
+      setEditingAmount(false);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   const upload = async (file) => {
     if (!file) return;
@@ -25,7 +37,7 @@ export default function NotaryCard({ client, can, onClientChange }) {
     if (file.size > 10 * 1024 * 1024) return setError("Fayl 10 MB dan katta.");
     setBusy(true);
     try {
-      onClientChange(await uploadNotaryPdf(client.id, file, date));
+      onClientChange(await uploadNotaryPdf(client.id, file, date, Number(amount) || null));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -52,6 +64,28 @@ export default function NotaryCard({ client, can, onClientChange }) {
           : <Badge className="bg-slate-100 text-slate-600"><CircleDashed size={13} className="mr-1" /> Qilinmagan</Badge>}
       </div>
 
+      {client.notarized && (
+        <div className="mb-3 rounded-xl bg-emerald-50 px-3 py-2.5">
+          <p className="text-xs text-emerald-700">Notarius qilingan summa</p>
+          {editingAmount ? (
+            <div className="mt-1 flex gap-2">
+              <input inputMode="numeric" className="input py-1" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))} autoFocus />
+              <button className="btn-primary px-2.5 py-1" onClick={saveAmount} title="Saqlash"><Check size={15} /></button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-lg font-bold text-emerald-900">{client.notaryAmount ? fmtMoney(client.notaryAmount) : "kiritilmagan"}</p>
+              {can("clients:edit") && (
+                <button className="rounded-md p-1 text-emerald-700 hover:bg-emerald-100" onClick={() => setEditingAmount(true)} title="O'zgartirish"><Pencil size={14} /></button>
+              )}
+            </div>
+          )}
+          {client.notaryAmount && client.totalPrice && client.notaryAmount !== client.totalPrice && (
+            <p className="text-[11px] text-emerald-700">Shartnoma summasidan farqi: {fmtMoney(client.notaryAmount - client.totalPrice)}</p>
+          )}
+        </div>
+      )}
+
       {client.notarized && client.notaryPdfUrl && (
         <div className="mb-3 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
           <span className="grid h-10 w-10 place-items-center rounded-lg bg-white text-emerald-700"><FileText size={20} /></span>
@@ -75,6 +109,8 @@ export default function NotaryCard({ client, can, onClientChange }) {
           <p className="mb-2 text-xs text-slate-500">
             {client.notarized ? "Yangi versiyani yuklash" : "Notariusda tasdiqlangan shartnomani PDF qilib yuklang — mijoz \"notarius qilingan\" deb belgilanadi."}
           </p>
+          <label className="label">Notarial shartnomadagi summa (so'm)</label>
+          <input inputMode="numeric" className="input mb-2" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))} />
           <div className="flex gap-2">
             <input type="date" className="input" value={date} max={todayIso()} onChange={(e) => setDate(e.target.value)} title="Notarius sanasi" />
             <button className="btn-secondary shrink-0" onClick={() => inputRef.current?.click()} disabled={busy}>

@@ -4,7 +4,8 @@ export const CLIENT_COLUMNS = `id, apartment_id, full_name, passport, phone, con
   last_payment_date, total_price, down_payment, monthly_payment, installment_months,
   contract_pdf_name, contract_pdf_at, (contract_pdf IS NOT NULL) AS has_contract,
   full_name_cyr, jshshir, address, passport_issued_by, passport_issued_at, notarized, notarized_at,
-  notary_pdf_name, notary_pdf_at, (notary_pdf IS NOT NULL) AS has_notary_pdf`;
+  notary_pdf_name, notary_pdf_at, (notary_pdf IS NOT NULL) AS has_notary_pdf, notary_amount,
+  (SELECT count(*)::int FROM client_files f WHERE f.client_id = clients.id AND f.kind = 'passport') AS passport_files`;
 
 export const toClient = (r) => ({
   id: r.id,
@@ -30,6 +31,8 @@ export const toClient = (r) => ({
   notarized: r.notarized,
   notarizedAt: r.notarized_at,
   notaryPdfName: r.notary_pdf_name,
+  notaryAmount: r.notary_amount,
+  passportFiles: r.passport_files ?? 0,
   notaryPdfUrl: r.has_notary_pdf ? `/api/clients/${r.id}/notary?v=${new Date(r.notary_pdf_at).getTime()}` : null,
 });
 

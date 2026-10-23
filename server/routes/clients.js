@@ -25,6 +25,7 @@ const FIELDS = {
   installmentMonths: "installment_months",
   fullNameCyr: "full_name_cyr",
   jshshir: "jshshir",
+  notaryAmount: "notary_amount",
   address: "address",
   passportIssuedBy: "passport_issued_by",
   passportIssuedAt: "passport_issued_at",
@@ -39,6 +40,7 @@ function validateClient(body, partial) {
   for (const k of ["fullNameCyr", "address", "passportIssuedBy"]) if (has(k)) v[k] = String(body[k] ?? "").trim();
   if (has("jshshir")) v.jshshir = String(body.jshshir ?? "").replace(/\D/g, "");
   if (has("passportIssuedAt")) v.passportIssuedAt = body.passportIssuedAt || null;
+  if (has("notaryAmount")) v.notaryAmount = body.notaryAmount === null || body.notaryAmount === "" ? null : money(body.notaryAmount);
   if (!partial || has("contractDate")) v.contractDate = body.contractDate;
   for (const k of ["totalPrice", "downPayment", "monthlyPayment"]) if (!partial || has(k)) v[k] = money(body[k]);
   if (!partial || has("installmentMonths")) v.installmentMonths = Math.round(Number(body.installmentMonths) || 0);
@@ -197,21 +199,24 @@ router.post("/:id/notary", requirePerm("contracts:upload"), upload.single("file"
   if (!req.file) return res.status(400).json({ error: "Fayl yuborilmadi" });
   if (req.file.buffer.subarray(0, 5).toString() !== "%PDF-") return res.status(400).json({ error: "Fayl PDF formatida emas" });
   const date = isDate(req.body?.date) ? req.body.date : new Date().toISOString().slice(0, 10);
+  const amount = money(req.body?.amount) || null; // notarial shartnomadagi summa
 
   const { rows } = await query(
-    `UPDATE clients SET notary_pdf = $1, notary_pdf_name = $2, notary_pdf_at = now(), notarized = TRUE, notarized_at = $3, updated_at = now()
+    `UPDATE clients SET notary_pdf = $1, notary_pdf_name = $2, notary_pdf_at = now(), notarized = TRUE, notarized_at = $3,
+       notary_amount = COALESCE($5, notary_amount, total_price), updated_at = now()
      WHERE id = $4 RETURNING ${CLIENT_COLUMNS}`,
-    [req.file.buffer, req.file.originalname, date, id],
+    [req.file.buffer, req.file.originalname, date, id, amount],
   );
   if (!rows[0]) return res.status(404).json({ error: "Mijoz topilmadi" });
-  await audit(null, req.user.id, "notarize", "client", id, { name: rows[0].full_name, date, file: req.file.originalname });
+  await audit(null, req.user.id, "notarize", "client", id, { name: rows[0].full_name, date, amount: rows[0].notary_amount, file: req.file.originalname });
   res.json(toClient(rows[0]));
 }));
 
 router.delete("/:id/notary", requirePerm("clients:delete"), ah(async (req, res) => {
   const id = Number(req.params.id);
   const { rows } = await query(
-    `UPDATE clients SET notary_pdf = NULL, notary_pdf_name = NULL, notary_pdf_at = NULL, notarized = FALSE, notarized_at = NULL, updated_at = now()
+    `UPDATE clients SET notary_pdf = NULL, notary_pdf_name = NULL, notary_pdf_at = NULL, notarized = FALSE, notarized_at = NULL,
+       notary_amount = NULL, updated_at = now()
      WHERE id = $1 RETURNING ${CLIENT_COLUMNS}`,
     [id],
   );
@@ -238,6 +243,92 @@ router.post("/:id/notary-docs", requirePerm("clients:edit"), ah(async (req, res)
   const c = (await query("SELECT full_name FROM clients WHERE id = $1", [id])).rows[0];
   if (!c) return res.status(404).json({ error: "Mijoz topilmadi" });
   await audit(null, req.user.id, "notary_docs", "client", id, { name: c.full_name, date: req.body?.date });
+  res.json({ ok: true });
+}));
+
+// ---- Izohlar (qo'shimcha yozuvlar) ----
+
+router.get("/:id/notes", ah(async (req, res) => {
+  const { rows } = await query(
+    `SELECT n.id, n.text, n.created_at, n.created_by, u.full_name AS author
+     FROM client_notes n LEFT JOIN users u ON u.id = n.created_by WHERE n.client_id = $1 ORDER BY n.created_at DESC`,
+    [Number(req.params.id)],
+  );
+  res.json(rows.map((r) => ({ id: r.id, text: r.text, createdAt: r.created_at, createdBy: r.created_by, author: r.author })));
+}));
+
+router.post("/:id/notes", ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const text = String(req.body?.text ?? "").trim();
+  if (!text) return res.status(400).json({ error: "Izoh bo'sh" });
+  if (text.length > 5000) return res.status(400).json({ error: "Izoh juda uzun (5000 belgigacha)" });
+  const { rows } = await query(
+    "INSERT INTO client_notes (client_id, text, created_by) SELECT $1, $2, $3 WHERE EXISTS (SELECT 1 FROM clients WHERE id = $1) RETURNING id, created_at",
+    [id, text, req.user.id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Mijoz topilmadi" });
+  res.status(201).json({ id: rows[0].id, text, createdAt: rows[0].created_at, createdBy: req.user.id, author: req.user.full_name });
+}));
+
+/** Izohni faqat muallifi yoki rahbar o'chira oladi. */
+router.delete("/:id/notes/:noteId", ah(async (req, res) => {
+  const note = (await query("SELECT created_by, text FROM client_notes WHERE id = $1 AND client_id = $2", [Number(req.params.noteId), Number(req.params.id)])).rows[0];
+  if (!note) return res.status(404).json({ error: "Izoh topilmadi" });
+  if (note.created_by !== req.user.id && req.user.role !== "admin") return res.status(403).json({ error: "Faqat o'z izohingizni o'chira olasiz" });
+  await query("DELETE FROM client_notes WHERE id = $1", [Number(req.params.noteId)]);
+  await audit(null, req.user.id, "delete_note", "client", req.params.id, { text: note.text.slice(0, 200) });
+  res.json({ ok: true });
+}));
+
+// ---- Pasport nusxasi (rasm yoki PDF) ----
+
+const FILE_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const fileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 4 },
+  fileFilter: (_req, file, cb) =>
+    FILE_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error("Faqat rasm (JPG, PNG) yoki PDF fayl qabul qilinadi")),
+});
+
+router.get("/:id/files", ah(async (req, res) => {
+  const { rows } = await query(
+    "SELECT id, kind, name, mime, size, created_at FROM client_files WHERE client_id = $1 ORDER BY created_at",
+    [Number(req.params.id)],
+  );
+  res.json(rows.map((r) => ({ id: r.id, kind: r.kind, name: r.name, mime: r.mime, size: r.size, createdAt: r.created_at, url: `/api/clients/${req.params.id}/files/${r.id}` })));
+}));
+
+router.post("/:id/files", requirePerm("contracts:upload"), fileUpload.array("files", 4), ah(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!req.files?.length) return res.status(400).json({ error: "Fayl yuborilmadi" });
+  const exists = await query("SELECT full_name FROM clients WHERE id = $1", [id]);
+  if (!exists.rowCount) return res.status(404).json({ error: "Mijoz topilmadi" });
+  const count = (await query("SELECT count(*)::int AS n FROM client_files WHERE client_id = $1 AND kind = 'passport'", [id])).rows[0].n;
+  if (count + req.files.length > 6) return res.status(400).json({ error: "Bitta mijozga ko'pi bilan 6 ta pasport fayli" });
+  for (const f of req.files) {
+    await query(
+      "INSERT INTO client_files (client_id, kind, name, mime, size, data, created_by) VALUES ($1, 'passport', $2, $3, $4, $5, $6)",
+      [id, f.originalname, f.mimetype, f.size, f.buffer, req.user.id],
+    );
+  }
+  await audit(null, req.user.id, "upload_passport", "client", id, { name: exists.rows[0].full_name, files: req.files.map((f) => f.originalname) });
+  res.status(201).json({ ok: true });
+}));
+
+router.get("/:id/files/:fileId", ah(async (req, res) => {
+  const { rows } = await query("SELECT name, mime, data FROM client_files WHERE id = $1 AND client_id = $2", [Number(req.params.fileId), Number(req.params.id)]);
+  if (!rows[0]) return res.status(404).json({ error: "Fayl topilmadi" });
+  res.removeHeader("Content-Security-Policy");
+  res.setHeader("Content-Type", rows[0].mime);
+  res.setHeader("Content-Disposition", `${req.query.download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(rows[0].name)}`);
+  res.setHeader("Cache-Control", "private, max-age=86400");
+  res.send(rows[0].data);
+}));
+
+router.delete("/:id/files/:fileId", requirePerm("clients:edit"), ah(async (req, res) => {
+  const { rows } = await query("DELETE FROM client_files WHERE id = $1 AND client_id = $2 RETURNING name", [Number(req.params.fileId), Number(req.params.id)]);
+  if (!rows[0]) return res.status(404).json({ error: "Fayl topilmadi" });
+  await audit(null, req.user.id, "delete_passport", "client", req.params.id, { file: rows[0].name });
   res.json({ ok: true });
 }));
 

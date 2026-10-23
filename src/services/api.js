@@ -58,10 +58,11 @@ export function uploadContract(clientId, file) {
   return api(`/clients/${clientId}/contract`, { method: "POST", form });
 }
 
-export function uploadNotaryPdf(clientId, file, date) {
+export function uploadNotaryPdf(clientId, file, date, amount) {
   const form = new FormData();
   form.append("file", file);
   form.append("date", date);
+  if (amount) form.append("amount", String(amount));
   return api(`/clients/${clientId}/notary`, { method: "POST", form });
 }
 

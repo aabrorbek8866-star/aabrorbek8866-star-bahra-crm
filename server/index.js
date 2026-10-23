@@ -18,6 +18,7 @@ import smsRouter from "./routes/sms.js";
 import aiRouter from "./routes/ai.js";
 import auditRouter from "./routes/audit.js";
 import apartmentsRouter from "./routes/apartments.js";
+import settingsRouter from "./routes/settings.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -53,6 +54,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/apartments", apartmentsRouter);
+app.use("/api/settings", settingsRouter);
 app.use("/api", (_req, res) => res.status(404).json({ error: "Topilmadi" }));
 
 // Ishlab chiqarishda tayyor frontend (vite build) ham shu serverdan beriladi
@@ -65,7 +67,11 @@ if (fs.existsSync(dist)) {
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   if (err.code === "23505") return res.status(409).json({ error: "Bunday yozuv allaqachon mavjud (takroriy qiymat)" });
-  if (err.name === "MulterError" || err.message?.includes("PDF")) return res.status(400).json({ error: err.message });
+  if (err.name === "MulterError") {
+    const msg = { LIMIT_FILE_SIZE: "Fayl hajmi ruxsat etilganidan katta", LIMIT_FILE_COUNT: "Bir martada juda ko'p fayl" }[err.code];
+    return res.status(400).json({ error: msg ?? err.message });
+  }
+  if (err.message?.includes("PDF")) return res.status(400).json({ error: err.message });
   console.error(err);
   res.status(err.status || 500).json({ error: err.status ? err.message : "Serverda xatolik" });
 });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Phone, IdCard, FileSignature, CalendarClock, Home, Scale, Pencil, FileSpreadsheet, Download, MapPin, Fingerprint } from "lucide-react";
+import { ArrowLeft, Plus, Phone, IdCard, FileSignature, CalendarClock, Home, Scale, Pencil, FileSpreadsheet, Download, MapPin, Fingerprint, MessageSquare } from "lucide-react";
 import { useCrm } from "../store/CrmContext";
 import { PageHeader, Modal, ProgressBar, Badge, EmptyState } from "../components/ui";
 import PaymentForm from "../components/payments/PaymentForm";
@@ -9,6 +9,9 @@ import ContractUpload from "../components/clients/ContractUpload";
 import ClientForm from "../components/clients/ClientForm";
 import NotaryCard from "../components/clients/NotaryCard";
 import ReceiptModal from "../components/payments/ReceiptModal";
+import ClientNotes from "../components/clients/ClientNotes";
+import PassportFiles from "../components/clients/PassportFiles";
+import ClientSmsModal from "../components/clients/ClientSmsModal";
 import PaymentScheduleImport from "../components/payments/PaymentScheduleImport";
 import { downloadPaymentSchedule } from "../utils/excel";
 import { useAgents } from "../components/ai/AgentContext";
@@ -24,7 +27,8 @@ export default function ClientProfile() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [receipt, setReceipt] = useState(null); // chek chiqariladigan to'lov
+  const [receipt, setReceipt] = useState(null);
+  const [smsOpen, setSmsOpen] = useState(false); // chek chiqariladigan to'lov
   const client = clientById.get(Number(id));
 
   if (!client) {
@@ -49,6 +53,9 @@ export default function ClientProfile() {
               >
                 <Scale size={16} /> Ogohlantirish xati (AI Yurist)
               </button>
+            )}
+            {can("sms:send") && (
+              <button className="btn-secondary" onClick={() => setSmsOpen(true)}><MessageSquare size={16} /> SMS</button>
             )}
             {can("clients:edit") && (
               <button className="btn-secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Tahrirlash</button>
@@ -123,10 +130,13 @@ export default function ClientProfile() {
           </div>
 
           <NotaryCard client={client} can={can} onClientChange={replaceClient} />
+          <PassportFiles clientId={client.id} canUpload={can("contracts:upload")} canDelete={can("clients:edit")} />
           <ContractUpload client={client} canUpload={can("contracts:upload")} onUploaded={replaceClient} />
         </div>
 
-        <div className="card p-5 lg:col-span-2">
+        <div className="space-y-4 lg:col-span-2">
+        <ClientNotes clientId={client.id} />
+        <div className="card p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-semibold text-slate-900">To'lovlar tarixi</h2>
             <div className="flex items-center gap-2">
@@ -148,6 +158,7 @@ export default function ClientProfile() {
             onReceipt={setReceipt}
           />
         </div>
+        </div>
       </div>
 
       <Modal open={adding} onClose={() => setAdding(false)} title={`Yangi to'lov — ${client.fullName}`}>
@@ -163,6 +174,7 @@ export default function ClientProfile() {
       </Modal>
 
       <ReceiptModal client={client} payment={receipt} onClose={() => setReceipt(null)} />
+      {smsOpen && <ClientSmsModal client={client} open={smsOpen} onClose={() => setSmsOpen(false)} />}
 
       <Modal open={editing} onClose={() => setEditing(false)} title={`№${client.apartmentId} xonadon — mijoz ma'lumotlari`} wide>
         {editing && (

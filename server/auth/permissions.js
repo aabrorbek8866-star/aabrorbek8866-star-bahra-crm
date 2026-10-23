@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   "apartments:edit":  ["admin"],
   "clients:edit":     ["admin", "manager"],
   "clients:delete":   ["admin"],
+  "settings:edit":    ["admin"],
 };
 
 export const permissionsFor = (role) =>
