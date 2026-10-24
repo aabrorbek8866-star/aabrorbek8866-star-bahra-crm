@@ -4,10 +4,10 @@ import { requirePerm } from "../auth/middleware.js";
 import { ah } from "../lib/asyncHandler.js";
 import { audit } from "../lib/audit.js";
 import { BUILDING } from "../../shared/building.js";
+import { isRealIsoDate as isDate } from "../../shared/date.js";
 
 const router = Router();
 const TYPES = ["humo", "uzcard", "bank", "cash"];
-const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s));
 const int = (v) => Math.round(Number(v) || 0);
 
 /**

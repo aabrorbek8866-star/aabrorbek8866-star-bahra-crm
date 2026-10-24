@@ -67,6 +67,11 @@ if (fs.existsSync(dist)) {
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   if (err.code === "23505") return res.status(409).json({ error: "Bunday yozuv allaqachon mavjud (takroriy qiymat)" });
+  // PostgreSQL ma'lumot xatolari (22xxx: noto'g'ri sana, son va h.k.), CHECK cheklovlari (23514)
+  if (typeof err.code === "string" && (err.code.startsWith("22") || err.code === "23514")) {
+    console.warn("[db] ma'lumot xatosi:", err.code, err.message);
+    return res.status(400).json({ error: `Ma'lumot noto'g'ri: ${err.message}` });
+  }
   if (err.name === "MulterError") {
     const msg = { LIMIT_FILE_SIZE: "Fayl hajmi ruxsat etilganidan katta", LIMIT_FILE_COUNT: "Bir martada juda ko'p fayl" }[err.code];
     return res.status(400).json({ error: msg ?? err.message });

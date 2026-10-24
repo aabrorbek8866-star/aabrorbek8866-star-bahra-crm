@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { BUILDING, locateApartment } from "../../shared/building.js";
 import { COMPANY } from "../../shared/company.js";
+import { isRealIsoDate } from "../../shared/date.js";
 
 /*
  * Excel formati — kompaniyaning "C-blok" fayli asosida:
@@ -35,6 +36,11 @@ const pad = (n) => String(n).padStart(2, "0");
  * Excel sana (seriya raqam), "29.08.2020", "26.10. 2020", "02.06 2023", "06,08,2026", "2020-08-29".
  */
 export const toIsoDate = (v) => {
+  const iso = parseDateLoose(v);
+  return iso && isRealIsoDate(iso) ? iso : null; // 31.11.2020, 30.02.2021 kabi sanalar — noto'g'ri
+};
+
+function parseDateLoose(v) {
   if (v === null || v === undefined || v === "") return null;
   if (typeof v === "number") {
     const d = XLSX.SSF.parse_date_code(v);
@@ -45,7 +51,7 @@ export const toIsoDate = (v) => {
   if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
   m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   return m ? `${m[1]}-${pad(m[2])}-${pad(m[3])}` : null;
-};
+}
 
 // JSHSHIR 14 xonali — Excel uni katta son deb o'qib qolsa ham raqamlari saqlanadi
 const digitsOnly = (v) => (typeof v === "number" ? v.toFixed(0) : String(v ?? "")).replace(/\D/g, "");

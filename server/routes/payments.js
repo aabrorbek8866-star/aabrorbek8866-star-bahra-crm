@@ -4,6 +4,7 @@ import { requirePerm } from "../auth/middleware.js";
 import { ah } from "../lib/asyncHandler.js";
 import { audit } from "../lib/audit.js";
 import { PAYMENT_COLUMNS, PAYMENT_JOINS, toPayment } from "../lib/mappers.js";
+import { isRealIsoDate } from "../../shared/date.js";
 
 const router = Router();
 const TYPES = ["humo", "uzcard", "bank", "cash"];
@@ -13,7 +14,7 @@ function validate(body, partial = false) {
   const out = {};
   const { date, type, amount, comment } = body ?? {};
   if (!partial || date !== undefined) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || date > today()) return { error: "Sana noto'g'ri yoki kelajakda" };
+    if (!isRealIsoDate(date) || date > today()) return { error: "Sana noto'g'ri yoki kelajakda" };
     out.date = date;
   }
   if (!partial || type !== undefined) {
